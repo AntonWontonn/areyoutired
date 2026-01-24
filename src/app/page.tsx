@@ -1,5 +1,5 @@
-const Home = () => {
-  return <>Hello World</>;
-};
+import FocusTest from "@/components/FocusTest";
 
-export default Home;
+export default function Page() {
+  return <FocusTest />;
+}
