@@ -1,3 +1,4 @@
+// src/components/FocusTest.tsx
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +13,14 @@ function phaseLabel(phase: Question["phase"]) {
   if (phase === "reaction") return "Reaction";
   if (phase === "speed") return "Speed";
   return "Control";
+}
+
+function readinessLabel(score: number) {
+  if (score >= 85) return "Excellent";
+  if (score >= 70) return "Good";
+  if (score >= 55) return "Borderline";
+  if (score >= 40) return "Poor";
+  return "Very low";
 }
 
 export default function FocusTest({
@@ -29,29 +38,22 @@ export default function FocusTest({
   const [timeLeft, setTimeLeft] = useState<number>(5);
   const [done, setDone] = useState(false);
 
-  // Small delay state for reaction tasks
   const [phaseState, setPhaseState] = useState<"waiting" | "active">("waiting");
   const delayTimeoutRef = useRef<number | null>(null);
 
-  // Keyboard selection for reaction tasks (Left/Right)
   const [kbSelected, setKbSelected] = useState<number>(0);
 
   const startTimeRef = useRef<number>(Date.now());
 
   const q = questions[index];
 
-  // Initialize question: time limit + optional pre-delay
   useEffect(() => {
     if (done) return;
     if (!q) return;
 
-    // reset selection each question
     setKbSelected(0);
-
-    // set timer
     setTimeLeft(q.timeLimitSec);
 
-    // clear any old delay
     if (delayTimeoutRef.current) {
       window.clearTimeout(delayTimeoutRef.current);
       delayTimeoutRef.current = null;
@@ -79,7 +81,6 @@ export default function FocusTest({
     };
   }, [index, done, q]);
 
-  // Countdown runs only when active
   useEffect(() => {
     if (done) return;
     if (phaseState !== "active") return;
@@ -91,7 +92,6 @@ export default function FocusTest({
     return () => window.clearInterval(interval);
   }, [phaseState, done]);
 
-  // Timeout auto-advance (counts as wrong)
   useEffect(() => {
     if (done) return;
     if (!q) return;
@@ -102,7 +102,6 @@ export default function FocusTest({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, done, phaseState, q]);
 
-  // Keyboard handling for reaction phase (Arrow keys select, Space submits)
   useEffect(() => {
     if (done) return;
     if (!q) return;
@@ -110,11 +109,8 @@ export default function FocusTest({
     if (phaseState !== "active") return;
 
     const onKeyDown = (e: KeyboardEvent) => {
-      // Only handle for 2-choice reaction tasks
       const isLeftRight =
-        q.choices.length === 2 &&
-        q.choices.includes("Left") &&
-        q.choices.includes("Right");
+        q.choices.length === 2 && q.choices.includes("Left") && q.choices.includes("Right");
 
       if (!isLeftRight) return;
 
@@ -125,7 +121,6 @@ export default function FocusTest({
         e.preventDefault();
         setKbSelected(q.choices.indexOf("Right"));
       } else if (e.key === " ") {
-        // Spacebar submits selection
         e.preventDefault();
         handleAnswer(kbSelected, false);
       }
@@ -145,13 +140,7 @@ export default function FocusTest({
 
     const newLogs: AnswerLog[] = [
       ...logs,
-      {
-        qid: q.id,
-        phase: q.phase,
-        correct,
-        timeMs,
-        timedOut,
-      },
+      { qid: q.id, phase: q.phase, correct, timeMs, timedOut },
     ];
     setLogs(newLogs);
 
@@ -182,71 +171,107 @@ export default function FocusTest({
     const rec = getRecommendation(result);
 
     const pct = Math.round(result.accuracy * 100);
-    const med = Math.round(result.med);
+    const readiness = result.readinessScore;
+    const readinessText = readinessLabel(readiness);
 
-    const r = result.phase.reaction;
-    const s = result.phase.speed;
-    const c = result.phase.control;
-
-    function pctSigned(x: number) {
-      const v = Math.round(x * 100);
-      return (v >= 0 ? "+" : "") + v + "%";
-    }
+    const { alertness, mentalSpeed, selfControl } = result.signals;
 
     return (
-      <main style={{ maxWidth: 820, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
+      <main style={{ maxWidth: 860, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
         <button onClick={onExit} style={{ marginBottom: 12 }}>
           ← Back
         </button>
 
         <h1>Focus Result</h1>
 
-        <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 12 }}>
-          <p style={{ marginTop: 0 }}>
-            <b>Overall:</b> {result.correctTotal}/{result.total} ({pct}%) · <b>Median RT:</b> {med} ms ·{" "}
-            <b>Lapses:</b> {result.lapses}
-          </p>
-
-          <p style={{ margin: "10px 0 0 0" }}>
-            <b>Phase scores:</b>{" "}
-            Reaction {result.scores.reactionScore} · Speed {result.scores.speedScore} · Control{" "}
-            {result.scores.controlScore} · <b>Total</b> {result.scores.overallScore}
-          </p>
-        </div>
-
-        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-          <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
-            <b>Reaction</b>
-            <div>Accuracy: {Math.round(r.accuracy * 100)}%</div>
-            <div>Median RT: {Math.round(r.med)} ms</div>
-            <div>Slowdown: {pctSigned(r.slowdownPct)}</div>
-            <div>Lapses: {r.lapses}</div>
+        {/* Big verdict */}
+        <div style={{ border: "1px solid #ddd", borderRadius: 14, padding: 16, marginTop: 12 }}>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>
+            {result.profile.emoji} {result.profile.headline}
           </div>
+          <div style={{ marginTop: 6, fontSize: 16, opacity: 0.9 }}>{result.profile.explanation}</div>
 
-          <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
-            <b>Speed (DSST)</b>
-            <div>Accuracy: {Math.round(s.accuracy * 100)}%</div>
-            <div>Median RT: {Math.round(s.med)} ms</div>
-            <div>Slowdown: {pctSigned(s.slowdownPct)}</div>
-            <div>Lapses: {s.lapses}</div>
-          </div>
-
-          <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
-            <b>Control (Go/No-Go)</b>
-            <div>Accuracy: {Math.round(c.accuracy * 100)}%</div>
-            <div>Median RT: {Math.round(c.med)} ms</div>
-            <div>Slowdown: {pctSigned(c.slowdownPct)}</div>
-            <div>Lapses: {c.lapses}</div>
+          <div style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <div>
+              <b>Focus readiness:</b> {readiness} / 100 ({readinessText})
+            </div>
+            <div>
+              <b>Confidence:</b> {result.confidence} ({result.total} questions)
+            </div>
+            <div>
+              <b>Accuracy:</b> {result.correctTotal}/{result.total} ({pct}%)
+            </div>
+            <div>
+              <b>Lapses:</b> {result.lapses}
+            </div>
           </div>
         </div>
 
-        <h2 style={{ marginTop: 18 }}>{rec}</h2>
+        {/* Signals */}
+        <h2 style={{ marginTop: 18 }}>Your focus signals</h2>
+
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+          {[alertness, mentalSpeed, selfControl].map((s) => (
+            <div key={s.title} style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>
+                {s.emoji} {s.title}: {s.level}
+              </div>
+              <div style={{ marginTop: 8 }}>{s.oneLiner}</div>
+              <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18, opacity: 0.9 }}>
+                {s.details.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {/* Do now / Avoid */}
+        <h2 style={{ marginTop: 18 }}>What to do now</h2>
+        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+          <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Recommended</div>
+            <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18 }}>
+              {result.profile.doNow.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Avoid</div>
+            <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18 }}>
+              {result.profile.avoid.map((x) => (
+                <li key={x}>{x}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Trust builder */}
+        <div style={{ marginTop: 16, border: "1px solid #f0f0f0", borderRadius: 14, padding: 14 }}>
+          <div style={{ fontWeight: 700 }}>Why this recommendation?</div>
+          <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18, opacity: 0.9 }}>
+            {result.why.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Backwards compatible recommendation string */}
+        <p style={{ marginTop: 16, opacity: 0.85 }}>{rec}</p>
 
         <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-          <button onClick={reset} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}>
+          <button
+            onClick={reset}
+            style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}
+          >
             Retake
           </button>
-          <button onClick={onExit} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}>
+          <button
+            onClick={onExit}
+            style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}
+          >
             Home
           </button>
         </div>
@@ -256,7 +281,6 @@ export default function FocusTest({
 
   const disabled = phaseState !== "active";
 
-  // Keyboard hint only when it actually applies
   const isReactionKeyboard =
     q.keyboard &&
     q.choices.length === 2 &&
@@ -272,8 +296,8 @@ export default function FocusTest({
       <h1>Focus Check</h1>
 
       <p style={{ margin: "6px 0" }}>
-        <b>Preset:</b> {preset === "mini" ? "Mini (~1 min)" : "Full (2 min)"} ·{" "}
-        <b>Phase:</b> {phaseLabel(q.phase)}
+        <b>Preset:</b> {preset === "mini" ? "Mini (~1 min)" : "Full (2 min)"} · <b>Phase:</b>{" "}
+        {phaseLabel(q.phase)}
       </p>
 
       <p style={{ margin: "6px 0" }}>
