@@ -12,11 +12,14 @@ export default function Page() {
 
   return (
     <main className="relative min-h-screen flex items-center justify-center overflow-hidden">
-
       {/* Cozy Gradient Background */}
-      <div className="absolute inset-0" style={{
-        background: "linear-gradient(135deg, #1f1f2e 0%, #3d3d52 25%, #1f1f2e 50%, #2d2d42 75%, #1f1f2e 100%)",
-      }} />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(135deg, #1f1f2e 0%, #3d3d52 25%, #1f1f2e 50%, #2d2d42 75%, #1f1f2e 100%)",
+        }}
+      />
 
       {/* Warm overlay for cozy feel */}
       <div className="absolute inset-0 bg-gradient-to-b from-orange-900/20 via-transparent to-amber-900/20" />
@@ -34,8 +37,8 @@ export default function Page() {
         <div className="h-1 w-24 bg-gradient-to-r from-orange-400 to-amber-400 mx-auto mb-8 rounded-full" />
 
         <p className="text-amber-50 text-lg md:text-xl mb-10 max-w-2xl mx-auto leading-relaxed">
-          Take a quick focus test to see how sharp your attention
-          and reaction speed really are.
+          Take a quick focus test to see how sharp your attention and reaction
+          speed really are.
         </p>
 
         <button
@@ -54,10 +57,12 @@ export default function Page() {
             boxShadow: "0 4px 15px rgba(249, 115, 22, 0.3)",
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = "0 0 30px rgba(249, 115, 22, 0.8), 0 0 60px rgba(217, 119, 6, 0.6), 0 4px 15px rgba(249, 115, 22, 0.3)";
+            e.currentTarget.style.boxShadow =
+              "0 0 30px rgba(249, 115, 22, 0.8), 0 0 60px rgba(217, 119, 6, 0.6), 0 4px 15px rgba(249, 115, 22, 0.3)";
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = "0 4px 15px rgba(249, 115, 22, 0.3)";
+            e.currentTarget.style.boxShadow =
+              "0 4px 15px rgba(249, 115, 22, 0.3)";
           }}
         >
           Take the Test

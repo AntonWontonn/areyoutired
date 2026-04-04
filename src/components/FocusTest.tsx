@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { makeQuestionSet, type Question } from "../utils/questions";
-import { computeResults, getRecommendation, type AnswerLog } from "../utils/scoring";
+import {
+  computeResults,
+  getRecommendation,
+  type AnswerLog,
+} from "../utils/scoring";
 
 function randInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -74,14 +78,21 @@ export default function FocusTest() {
   }
 
   if (done) {
-    const { correctCount, accuracy, avgMs, score } = computeResults(logs, total);
+    const { correctCount, accuracy, avgMs, score } = computeResults(
+      logs,
+      total,
+    );
 
     return (
       <main className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Cozy Gradient Background */}
-        <div className="absolute inset-0" style={{
-          background: "linear-gradient(135deg, #1f1f2e 0%, #3d3d52 25%, #1f1f2e 50%, #2d2d42 75%, #1f1f2e 100%)",
-        }} />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, #1f1f2e 0%, #3d3d52 25%, #1f1f2e 50%, #2d2d42 75%, #1f1f2e 100%)",
+          }}
+        />
 
         {/* Warm overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-orange-900/20 via-transparent to-amber-900/20" />
@@ -100,17 +111,26 @@ export default function FocusTest() {
 
           <div className="bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-orange-500/30 space-y-4">
             <p className="text-amber-50 text-xl">
-              <span className="text-orange-300 font-semibold">Accuracy:</span> {correctCount}/{total} ({Math.round(accuracy * 100)}%)
+              <span className="text-orange-300 font-semibold">Accuracy:</span>{" "}
+              {correctCount}/{total} ({Math.round(accuracy * 100)}%)
             </p>
             <p className="text-amber-50 text-xl">
-              <span className="text-orange-300 font-semibold">Avg response time:</span> {avgMs} ms
+              <span className="text-orange-300 font-semibold">
+                Avg response time:
+              </span>{" "}
+              {avgMs} ms
             </p>
             <p className="text-amber-50 text-xl">
-              <span className="text-orange-300 font-semibold">Focus score:</span> {Math.round(score * 100)} / 100
+              <span className="text-orange-300 font-semibold">
+                Focus score:
+              </span>{" "}
+              {Math.round(score * 100)} / 100
             </p>
           </div>
 
-          <h2 className="text-amber-100 text-2xl mt-10 mb-8">{getRecommendation(score)}</h2>
+          <h2 className="text-amber-100 text-2xl mt-10 mb-8">
+            {getRecommendation(score)}
+          </h2>
 
           <button
             onClick={reset}
@@ -126,10 +146,12 @@ export default function FocusTest() {
               boxShadow: "0 4px 15px rgba(249, 115, 22, 0.3)",
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = "0 0 30px rgba(249, 115, 22, 0.8), 0 0 60px rgba(217, 119, 6, 0.6), 0 4px 15px rgba(249, 115, 22, 0.3)";
+              e.currentTarget.style.boxShadow =
+                "0 0 30px rgba(249, 115, 22, 0.8), 0 0 60px rgba(217, 119, 6, 0.6), 0 4px 15px rgba(249, 115, 22, 0.3)";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = "0 4px 15px rgba(249, 115, 22, 0.3)";
+              e.currentTarget.style.boxShadow =
+                "0 4px 15px rgba(249, 115, 22, 0.3)";
             }}
           >
             Retake Test
@@ -142,9 +164,13 @@ export default function FocusTest() {
   return (
     <main className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Cozy Gradient Background */}
-      <div className="absolute inset-0" style={{
-        background: "linear-gradient(135deg, #1f1f2e 0%, #3d3d52 25%, #1f1f2e 50%, #2d2d42 75%, #1f1f2e 100%)",
-      }} />
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(135deg, #1f1f2e 0%, #3d3d52 25%, #1f1f2e 50%, #2d2d42 75%, #1f1f2e 100%)",
+        }}
+      />
 
       {/* Warm overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-orange-900/20 via-transparent to-amber-900/20" />
@@ -165,10 +191,14 @@ export default function FocusTest() {
         {/* Question Info */}
         <div className="flex justify-between items-center mb-8 text-amber-100">
           <p className="text-lg">
-            Question <span className="text-orange-300 font-bold">{index + 1}</span> / {total}
+            Question{" "}
+            <span className="text-orange-300 font-bold">{index + 1}</span> /{" "}
+            {total}
           </p>
           <p className="text-xl font-semibold">
-            <span className={`px-4 py-2 rounded-lg ${timeLeft <= 10 ? 'bg-red-500/50 text-red-100' : 'bg-orange-500/50 text-orange-100'}`}>
+            <span
+              className={`px-4 py-2 rounded-lg ${timeLeft <= 10 ? "bg-red-500/50 text-red-100" : "bg-orange-500/50 text-orange-100"}`}
+            >
               {timeLeft}s
             </span>
           </p>
@@ -176,7 +206,9 @@ export default function FocusTest() {
 
         {/* Question Box */}
         <div className="bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-orange-500/30 mb-8 hover:border-orange-400/60 transition-all duration-300">
-          <pre className="text-amber-50 text-2xl whitespace-pre-wrap font-medium">{q.prompt}</pre>
+          <pre className="text-amber-50 text-2xl whitespace-pre-wrap font-medium">
+            {q.prompt}
+          </pre>
         </div>
 
         {/* Answer Choices */}
@@ -199,7 +231,8 @@ export default function FocusTest() {
                 active:shadow-orange-500/40 active:shadow-lg
               "
               onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = "0 0 20px rgba(249, 115, 22, 0.4), inset 0 0 15px rgba(249, 115, 22, 0.1)";
+                e.currentTarget.style.boxShadow =
+                  "0 0 20px rgba(249, 115, 22, 0.4), inset 0 0 15px rgba(249, 115, 22, 0.1)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.boxShadow = "";

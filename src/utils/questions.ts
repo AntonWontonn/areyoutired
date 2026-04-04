@@ -51,7 +51,8 @@ export function makeQuestionSet(total = 18): Question[] {
   });
 
   for (let i = 1; i < 5; i++) {
-    const cur = Math.random() < 0.5 ? prev : symbols[randInt(0, symbols.length - 1)];
+    const cur =
+      Math.random() < 0.5 ? prev : symbols[randInt(0, symbols.length - 1)];
     const isSame = cur === prev;
 
     qs.push({
@@ -77,7 +78,8 @@ export function makeQuestionSet(total = 18): Question[] {
   });
 
   for (let i = 6; i < 10; i++) {
-    const cur = Math.random() < 0.5 ? prev : symbols[randInt(0, symbols.length - 1)];
+    const cur =
+      Math.random() < 0.5 ? prev : symbols[randInt(0, symbols.length - 1)];
     const isSame = cur === prev;
 
     qs.push({
@@ -92,7 +94,7 @@ export function makeQuestionSet(total = 18): Question[] {
   }
 
   // Find and remove the first remember question to keep it at the start
-  const rememberIndex = qs.findIndex(q => q.id === 'same-0');
+  const rememberIndex = qs.findIndex((q) => q.id === "same-0");
   const rememberQuestion = qs.splice(rememberIndex, 1)[0];
 
   // Shuffle the remaining questions and take what we need
