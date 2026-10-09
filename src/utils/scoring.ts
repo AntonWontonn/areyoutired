@@ -122,7 +122,9 @@ function interpretAlertness(reaction: PhaseSummary): InterpretedSignal {
   let oneLiner = "";
   if (score === 3) oneLiner = "You’re responding quickly and consistently.";
   else if (score === 2) oneLiner = "You seem alert enough to keep going.";
-  else if (score === 1) oneLiner = "You look slightly tired—responses are slower or you had a lapse.";
+  else if (score === 1)
+    oneLiner =
+      "You look slightly tired—responses are slower or you had a lapse.";
   else oneLiner = "Alertness looks low—this is a sign to take a real reset.";
 
   return {
@@ -145,8 +147,9 @@ function interpretMentalSpeed(speed: PhaseSummary): InterpretedSignal {
   let score: 0 | 1 | 2 | 3 = 2;
 
   if (accuracy < 0.75 || lapses >= 2) score = 0;
-  else if (accuracy < 0.85 || slowdownPct > 0.20 || lapses === 1) score = 1;
-  else if (accuracy >= 0.95 && med > 0 && med < 1400 && slowdownPct <= 0.12) score = 3;
+  else if (accuracy < 0.85 || slowdownPct > 0.2 || lapses === 1) score = 1;
+  else if (accuracy >= 0.95 && med > 0 && med < 1400 && slowdownPct <= 0.12)
+    score = 3;
   else score = 2;
 
   const level = levelFromScore(score);
@@ -155,9 +158,13 @@ function interpretMentalSpeed(speed: PhaseSummary): InterpretedSignal {
   const trend = trendLabel(slowdownPct);
 
   let oneLiner = "";
-  if (score === 3) oneLiner = "Fast and accurate—good condition for learning new material.";
-  else if (score === 2) oneLiner = "Solid mental speed—learning should still be productive.";
-  else if (score === 1) oneLiner = "Efficiency is dropping—review/practice is better than new concepts.";
+  if (score === 3)
+    oneLiner = "Fast and accurate—good condition for learning new material.";
+  else if (score === 2)
+    oneLiner = "Solid mental speed—learning should still be productive.";
+  else if (score === 1)
+    oneLiner =
+      "Efficiency is dropping—review/practice is better than new concepts.";
   else oneLiner = "Mental speed looks foggy—studying now will have low payoff.";
 
   return {
@@ -194,8 +201,10 @@ function interpretSelfControl(control: PhaseSummary): InterpretedSignal {
 
   let oneLiner = "";
   if (score === 3) oneLiner = "Great control—few careless or impulse mistakes.";
-  else if (score === 2) oneLiner = "Control looks stable—good for focused work.";
-  else if (score === 1) oneLiner = "Some careless errors—slow down or take a short break.";
+  else if (score === 2)
+    oneLiner = "Control looks stable—good for focused work.";
+  else if (score === 1)
+    oneLiner = "Some careless errors—slow down or take a short break.";
   else oneLiner = "Control looks low—likely distracted or restless right now.";
 
   return {
@@ -219,19 +228,30 @@ function confidenceFromTotal(total: number): Confidence {
   return "Low";
 }
 
-function buildProfile(alert: InterpretedSignal, speed: InterpretedSignal, control: InterpretedSignal): Profile {
+function buildProfile(
+  alert: InterpretedSignal,
+  speed: InterpretedSignal,
+  control: InterpretedSignal,
+): Profile {
   const avg = (alert.score0to3 + speed.score0to3 + control.score0to3) / 3;
 
   // Red flags
-  const anyLow = alert.score0to3 === 0 || speed.score0to3 === 0 || control.score0to3 === 0;
-  const twoOrMoreOkayOrWorse = [alert, speed, control].filter((s) => s.score0to3 <= 1).length >= 2;
+  const anyLow =
+    alert.score0to3 === 0 || speed.score0to3 === 0 || control.score0to3 === 0;
+  const twoOrMoreOkayOrWorse =
+    [alert, speed, control].filter((s) => s.score0to3 <= 1).length >= 2;
 
   if (!anyLow && avg >= 2.6) {
     return {
       emoji: "✅",
       headline: "Excellent to study",
-      explanation: "You look sharp and steady—this is a good window for hard work.",
-      doNow: ["Learn new material", "Do the hardest problem set", "Deep focus 25–40 min"],
+      explanation:
+        "You look sharp and steady—this is a good window for hard work.",
+      doNow: [
+        "Learn new material",
+        "Do the hardest problem set",
+        "Deep focus 25–40 min",
+      ],
       avoid: ["Long scrolling breaks", "Multitasking"],
     };
   }
@@ -240,7 +260,8 @@ function buildProfile(alert: InterpretedSignal, speed: InterpretedSignal, contro
     return {
       emoji: "🙂",
       headline: "Good to study",
-      explanation: "You’re in a workable state—keep going, but schedule a short break soon.",
+      explanation:
+        "You’re in a workable state—keep going, but schedule a short break soon.",
       doNow: ["Practice problems", "Review notes", "Break in ~20–30 min"],
       avoid: ["Starting a huge new chapter if you feel tired"],
     };
@@ -250,8 +271,13 @@ function buildProfile(alert: InterpretedSignal, speed: InterpretedSignal, contro
     return {
       emoji: "🟡",
       headline: "Borderline",
-      explanation: "You can study, but efficiency is dropping—stick to lighter tasks.",
-      doNow: ["Review / flashcards", "Light practice", "Short break now or very soon"],
+      explanation:
+        "You can study, but efficiency is dropping—stick to lighter tasks.",
+      doNow: [
+        "Review / flashcards",
+        "Light practice",
+        "Short break now or very soon",
+      ],
       avoid: ["Brand new concepts", "Timed mock exams"],
     };
   }
@@ -259,8 +285,13 @@ function buildProfile(alert: InterpretedSignal, speed: InterpretedSignal, contro
   return {
     emoji: "🟠",
     headline: "Break recommended",
-    explanation: "Your signals suggest fatigue or inconsistency—reset before you push more.",
-    doNow: ["5–10 min walk", "Water + stretch", "Retry the mini check after the break"],
+    explanation:
+      "Your signals suggest fatigue or inconsistency—reset before you push more.",
+    doNow: [
+      "5–10 min walk",
+      "Water + stretch",
+      "Retry the mini check after the break",
+    ],
     avoid: ["Forcing hard studying right now"],
   };
 }
@@ -294,7 +325,9 @@ export function computeResults(allLogs: AnswerLog[]) {
   const selfControl = interpretSelfControl(phase.control);
 
   // “readiness score” 0..100 mapped from 0..3 signal scores
-  const readiness01 = clamp01((alertness.score0to3 + mentalSpeed.score0to3 + selfControl.score0to3) / 9);
+  const readiness01 = clamp01(
+    (alertness.score0to3 + mentalSpeed.score0to3 + selfControl.score0to3) / 9,
+  );
   const readinessScore = Math.round(readiness01 * 100);
 
   const confidence = confidenceFromTotal(total);

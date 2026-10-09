@@ -2,8 +2,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { makeQuestionSet, type Question, type TestPreset } from "../utils/questions";
-import { computeResults, getRecommendation, type AnswerLog } from "../utils/scoring";
+import {
+  makeQuestionSet,
+  type Question,
+  type TestPreset,
+} from "../utils/questions";
+import {
+  computeResults,
+  getRecommendation,
+  type AnswerLog,
+} from "../utils/scoring";
 
 function randInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -99,7 +107,6 @@ export default function FocusTest({
     if (timeLeft > 0) return;
 
     handleAnswer(-1, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, done, phaseState, q]);
 
   useEffect(() => {
@@ -110,7 +117,9 @@ export default function FocusTest({
 
     const onKeyDown = (e: KeyboardEvent) => {
       const isLeftRight =
-        q.choices.length === 2 && q.choices.includes("Left") && q.choices.includes("Right");
+        q.choices.length === 2 &&
+        q.choices.includes("Left") &&
+        q.choices.includes("Right");
 
       if (!isLeftRight) return;
 
@@ -157,7 +166,14 @@ export default function FocusTest({
 
   if (!q) {
     return (
-      <main style={{ maxWidth: 720, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
+      <main
+        style={{
+          maxWidth: 720,
+          margin: "40px auto",
+          padding: 16,
+          fontFamily: "system-ui",
+        }}
+      >
         <button onClick={onExit} style={{ marginBottom: 12 }}>
           ← Back
         </button>
@@ -177,7 +193,14 @@ export default function FocusTest({
     const { alertness, mentalSpeed, selfControl } = result.signals;
 
     return (
-      <main style={{ maxWidth: 860, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
+      <main
+        style={{
+          maxWidth: 860,
+          margin: "40px auto",
+          padding: 16,
+          fontFamily: "system-ui",
+        }}
+      >
         <button onClick={onExit} style={{ marginBottom: 12 }}>
           ← Back
         </button>
@@ -185,13 +208,29 @@ export default function FocusTest({
         <h1>Focus Result</h1>
 
         {/* Big verdict */}
-        <div style={{ border: "1px solid #ddd", borderRadius: 14, padding: 16, marginTop: 12 }}>
+        <div
+          style={{
+            border: "1px solid #ddd",
+            borderRadius: 14,
+            padding: 16,
+            marginTop: 12,
+          }}
+        >
           <div style={{ fontSize: 22, fontWeight: 700 }}>
             {result.profile.emoji} {result.profile.headline}
           </div>
-          <div style={{ marginTop: 6, fontSize: 16, opacity: 0.9 }}>{result.profile.explanation}</div>
+          <div style={{ marginTop: 6, fontSize: 16, opacity: 0.9 }}>
+            {result.profile.explanation}
+          </div>
 
-          <div style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>
+          <div
+            style={{
+              marginTop: 12,
+              display: "flex",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
             <div>
               <b>Focus readiness:</b> {readiness} / 100 ({readinessText})
             </div>
@@ -210,14 +249,34 @@ export default function FocusTest({
         {/* Signals */}
         <h2 style={{ marginTop: 18 }}>Your focus signals</h2>
 
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          }}
+        >
           {[alertness, mentalSpeed, selfControl].map((s) => (
-            <div key={s.title} style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}>
+            <div
+              key={s.title}
+              style={{
+                border: "1px solid #eee",
+                borderRadius: 14,
+                padding: 14,
+              }}
+            >
               <div style={{ fontWeight: 700, fontSize: 18 }}>
                 {s.emoji} {s.title}: {s.level}
               </div>
               <div style={{ marginTop: 8 }}>{s.oneLiner}</div>
-              <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18, opacity: 0.9 }}>
+              <ul
+                style={{
+                  marginTop: 10,
+                  marginBottom: 0,
+                  paddingLeft: 18,
+                  opacity: 0.9,
+                }}
+              >
                 {s.details.map((d) => (
                   <li key={d}>{d}</li>
                 ))}
@@ -228,8 +287,16 @@ export default function FocusTest({
 
         {/* Do now / Avoid */}
         <h2 style={{ marginTop: 18 }}>What to do now</h2>
-        <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
-          <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}>
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          }}
+        >
+          <div
+            style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}
+          >
             <div style={{ fontWeight: 700, fontSize: 16 }}>Recommended</div>
             <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18 }}>
               {result.profile.doNow.map((x) => (
@@ -238,7 +305,9 @@ export default function FocusTest({
             </ul>
           </div>
 
-          <div style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}>
+          <div
+            style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}
+          >
             <div style={{ fontWeight: 700, fontSize: 16 }}>Avoid</div>
             <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18 }}>
               {result.profile.avoid.map((x) => (
@@ -249,9 +318,23 @@ export default function FocusTest({
         </div>
 
         {/* Trust builder */}
-        <div style={{ marginTop: 16, border: "1px solid #f0f0f0", borderRadius: 14, padding: 14 }}>
+        <div
+          style={{
+            marginTop: 16,
+            border: "1px solid #f0f0f0",
+            borderRadius: 14,
+            padding: 14,
+          }}
+        >
           <div style={{ fontWeight: 700 }}>Why this recommendation?</div>
-          <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18, opacity: 0.9 }}>
+          <ul
+            style={{
+              marginTop: 10,
+              marginBottom: 0,
+              paddingLeft: 18,
+              opacity: 0.9,
+            }}
+          >
             {result.why.map((x) => (
               <li key={x}>{x}</li>
             ))}
@@ -264,13 +347,21 @@ export default function FocusTest({
         <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
           <button
             onClick={reset}
-            style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #ccc",
+            }}
           >
             Retake
           </button>
           <button
             onClick={onExit}
-            style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #ccc",
+            }}
           >
             Home
           </button>
@@ -288,7 +379,14 @@ export default function FocusTest({
     q.choices.includes("Right");
 
   return (
-    <main style={{ maxWidth: 720, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
+    <main
+      style={{
+        maxWidth: 720,
+        margin: "40px auto",
+        padding: 16,
+        fontFamily: "system-ui",
+      }}
+    >
       <button onClick={onExit} style={{ marginBottom: 12 }}>
         ← Back
       </button>
@@ -296,8 +394,8 @@ export default function FocusTest({
       <h1>Focus Check</h1>
 
       <p style={{ margin: "6px 0" }}>
-        <b>Preset:</b> {preset === "mini" ? "Mini (~1 min)" : "Full (2 min)"} · <b>Phase:</b>{" "}
-        {phaseLabel(q.phase)}
+        <b>Preset:</b> {preset === "mini" ? "Mini (~1 min)" : "Full (2 min)"} ·{" "}
+        <b>Phase:</b> {phaseLabel(q.phase)}
       </p>
 
       <p style={{ margin: "6px 0" }}>
@@ -314,8 +412,17 @@ export default function FocusTest({
         </p>
       )}
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 12 }}>
-        <div style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.4 }}>{q.prompt}</div>
+      <div
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          padding: 16,
+          marginTop: 12,
+        }}
+      >
+        <div style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.4 }}>
+          {q.prompt}
+        </div>
         {isReactionKeyboard && (
           <div style={{ marginTop: 10, opacity: 0.75, fontSize: 14 }}>
             Keyboard: ← / → to select · Space to submit

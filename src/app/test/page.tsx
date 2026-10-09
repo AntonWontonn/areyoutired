@@ -8,7 +8,7 @@ export default function TestPage() {
   const sp = useSearchParams();
   const router = useRouter();
 
-  const preset = ((sp.get("preset") as TestPreset) ?? "2min");
+  const preset = (sp.get("preset") as TestPreset) ?? "2min";
 
   return <FocusTest preset={preset} onExit={() => router.push("/")} />;
 }

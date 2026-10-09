@@ -55,7 +55,11 @@ function formatDSSTKey(key: Record<string, string>) {
     .join("   ");
 }
 
-function makeDSST(i: number, key: Record<string, string>, timeLimitSec: number): Question {
+function makeDSST(
+  i: number,
+  key: Record<string, string>,
+  timeLimitSec: number,
+): Question {
   const letters = Object.keys(key);
   const L = letters[randInt(0, letters.length - 1)];
   const correct = key[L];
@@ -151,13 +155,16 @@ export function makeQuestionSet(preset: TestPreset): TestPack {
         };
 
   const reaction: Question[] = [];
-  for (let i = 0; i < config.reactionN; i++) reaction.push(makeRTCompare(i, config.reactionLimit));
+  for (let i = 0; i < config.reactionN; i++)
+    reaction.push(makeRTCompare(i, config.reactionLimit));
 
   const speed: Question[] = [];
-  for (let i = 0; i < config.speedN; i++) speed.push(makeDSST(i, dsstKey, config.speedLimit));
+  for (let i = 0; i < config.speedN; i++)
+    speed.push(makeDSST(i, dsstKey, config.speedLimit));
 
   const control: Question[] = [];
-  for (let i = 0; i < config.controlN; i++) control.push(makeGoNoGo(i, config.controlLimit));
+  for (let i = 0; i < config.controlN; i++)
+    control.push(makeGoNoGo(i, config.controlLimit));
 
   // Gentle shuffle inside each phase
   const questions = [

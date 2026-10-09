@@ -12,11 +12,25 @@ export default function HomePage() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: "40px auto", padding: 16, fontFamily: "system-ui" }}>
+    <main
+      style={{
+        maxWidth: 720,
+        margin: "40px auto",
+        padding: 16,
+        fontFamily: "system-ui",
+      }}
+    >
       <h1>Focus Check</h1>
       <p>Quick test to decide: keep studying, break, or reset.</p>
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 12, padding: 16, marginTop: 16 }}>
+      <div
+        style={{
+          border: "1px solid #ddd",
+          borderRadius: 12,
+          padding: 16,
+          marginTop: 16,
+        }}
+      >
         <h2 style={{ marginTop: 0 }}>Choose test</h2>
 
         <label style={{ display: "block", marginTop: 8 }}>
@@ -39,7 +53,12 @@ export default function HomePage() {
 
         <button
           onClick={start}
-          style={{ marginTop: 16, padding: "10px 14px", borderRadius: 10, border: "1px solid #ccc" }}
+          style={{
+            marginTop: 16,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid #ccc",
+          }}
         >
           Start
         </button>
