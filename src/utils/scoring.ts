@@ -1,354 +1,1016 @@
 // src/utils/scoring.ts
-import type { Phase } from "./questions";
+
+import type {
+  Phase,
+  QType,
+  TestPreset,
+} from "./questions";
 
 export type AnswerLog = {
   qid: string;
   phase: Phase;
+  type: QType;
+
   correct: boolean;
   timeMs: number;
+
   timedOut: boolean;
+  responseMade: boolean;
+
+  trialKind?: "go" | "nogo";
+
+  commissionError?: boolean;
+  omissionError?: boolean;
 };
 
-type PhaseSummary = {
-  accuracy: number;
-  med: number;
-  sd: number;
-  lapses: number;
-  slowdownPct: number;
-};
+type Confidence =
+  | "Limited"
+  | "Moderate";
 
-type InterpretedSignal = {
+type Level =
+  | "Great"
+  | "Good"
+  | "Okay"
+  | "Low";
+
+type SignalResult = {
   title: string;
-  level: "Great" | "Good" | "Okay" | "Low";
+  score0to100: number;
+
+  level: Level;
   emoji: "✅" | "🙂" | "🟡" | "🔴";
+
   oneLiner: string;
   details: string[];
-  score0to3: 0 | 1 | 2 | 3;
 };
 
 type Profile = {
-  headline: string; // big verdict
-  emoji: "✅" | "🙂" | "🟡" | "🟠" | "🔴";
-  explanation: string; // one sentence
+  headline: string;
+
+  emoji:
+  | "✅"
+  | "🙂"
+  | "🟡"
+  | "🟠"
+  | "🔴";
+
+  explanation: string;
+
   doNow: string[];
   avoid: string[];
 };
 
-type Confidence = "Low" | "Medium" | "High";
-
-function mean(xs: number[]) {
-  return xs.reduce((a, b) => a + b, 0) / (xs.length || 1);
-}
-
-function stddev(xs: number[]) {
-  if (xs.length <= 1) return 0;
-  const m = mean(xs);
-  const v = mean(xs.map((x) => (x - m) ** 2));
-  return Math.sqrt(v);
+function clamp(
+  x: number,
+  min = 0,
+  max = 100,
+) {
+  return Math.max(
+    min,
+    Math.min(max, x),
+  );
 }
 
 function median(xs: number[]) {
-  if (xs.length === 0) return 0;
-  const a = xs.slice().sort((x, y) => x - y);
-  const mid = Math.floor(a.length / 2);
-  return a.length % 2 ? a[mid] : Math.round((a[mid - 1] + a[mid]) / 2);
+  if (xs.length === 0) {
+    return 0;
+  }
+
+  const sorted = [...xs].sort(
+    (a, b) => a - b,
+  );
+
+  const mid = Math.floor(
+    sorted.length / 2,
+  );
+
+  return sorted.length % 2
+    ? sorted[mid]
+    : (
+      sorted[mid - 1] +
+      sorted[mid]
+    ) / 2;
 }
 
-function clamp01(x: number) {
-  return Math.max(0, Math.min(1, x));
+function mad(xs: number[]) {
+  if (xs.length <= 1) {
+    return 0;
+  }
+
+  const med = median(xs);
+
+  return median(
+    xs.map((x) =>
+      Math.abs(x - med),
+    ),
+  );
 }
 
-function phaseSummary(logs: AnswerLog[]): PhaseSummary {
-  const total = logs.length || 1;
-  const correctCount = logs.filter((l) => l.correct && !l.timedOut).length;
-  const accuracy = correctCount / total;
-
-  const rts = logs.filter((l) => !l.timedOut).map((l) => l.timeMs);
-  const med = median(rts);
-  const sd = stddev(rts);
-
-  const lapses = logs.filter((l) => l.timedOut || l.timeMs > 2500).length;
-
-  // slowdown using thirds (negative = faster later, positive = slower later)
-  const rtsOrdered = logs.filter((l) => !l.timedOut).map((l) => l.timeMs);
-  const n = rtsOrdered.length;
-  const third = Math.max(1, Math.floor(n / 3));
-  const first = rtsOrdered.slice(0, third);
-  const last = rtsOrdered.slice(Math.max(0, n - third));
-  const firstMed = median(first);
-  const lastMed = median(last);
-  const slowdownPct = firstMed > 0 ? (lastMed - firstMed) / firstMed : 0;
-
-  return { accuracy, med, sd, lapses, slowdownPct };
+function roundTo5(x: number) {
+  return Math.round(x / 5) * 5;
 }
 
-function trendLabel(slowdownPct: number) {
-  if (slowdownPct > 0.12) return "Slowing down";
-  if (slowdownPct < -0.12) return "Speeding up";
-  return "Steady";
-}
+function scoreToLevel(
+  score: number,
+): Level {
+  if (score >= 85) {
+    return "Great";
+  }
 
-function levelFromScore(score0to3: 0 | 1 | 2 | 3): InterpretedSignal["level"] {
-  if (score0to3 === 3) return "Great";
-  if (score0to3 === 2) return "Good";
-  if (score0to3 === 1) return "Okay";
+  if (score >= 70) {
+    return "Good";
+  }
+
+  if (score >= 50) {
+    return "Okay";
+  }
+
   return "Low";
 }
 
-function emojiFromScore(score0to3: 0 | 1 | 2 | 3): InterpretedSignal["emoji"] {
-  if (score0to3 === 3) return "✅";
-  if (score0to3 === 2) return "🙂";
-  if (score0to3 === 1) return "🟡";
+function levelEmoji(
+  level: Level,
+): SignalResult["emoji"] {
+  if (level === "Great") {
+    return "✅";
+  }
+
+  if (level === "Good") {
+    return "🙂";
+  }
+
+  if (level === "Okay") {
+    return "🟡";
+  }
+
   return "🔴";
 }
 
-function interpretAlertness(reaction: PhaseSummary): InterpretedSignal {
-  // Reaction tasks are simple; RT here should be relatively low.
-  // For mouse/touch + pre-delay, a “typical” median often lands ~700–1200ms.
-  const { med, lapses, sd } = reaction;
+/**
+ * Maps an observed value onto a score
+ * using piecewise linear interpolation.
+ *
+ * These timing points are app-specific
+ * heuristics, not clinical norms.
+ */
+function interpolateScore(
+  value: number,
+  points: Array<[number, number]>,
+) {
+  if (value <= points[0][0]) {
+    return points[0][1];
+  }
 
-  let score: 0 | 1 | 2 | 3 = 2;
+  for (
+    let i = 1;
+    i < points.length;
+    i++
+  ) {
+    const [x2, y2] = points[i];
+    const [x1, y1] = points[i - 1];
 
-  if (lapses >= 2 || med > 1600) score = 0;
-  else if (lapses === 1 || med > 1200) score = 1;
-  else if (med < 800 && sd < 650) score = 3;
-  else score = 2;
+    if (value <= x2) {
+      const position =
+        (value - x1) /
+        (x2 - x1);
 
-  const level = levelFromScore(score);
-  const emoji = emojiFromScore(score);
+      return (
+        y1 +
+        position * (y2 - y1)
+      );
+    }
+  }
 
-  const consistency = sd > 900 ? "inconsistent" : "fairly consistent";
+  return points[
+    points.length - 1
+  ][1];
+}
 
-  let oneLiner = "";
-  if (score === 3) oneLiner = "You’re responding quickly and consistently.";
-  else if (score === 2) oneLiner = "You seem alert enough to keep going.";
-  else if (score === 1)
-    oneLiner =
-      "You look slightly tired—responses are slower or you had a lapse.";
-  else oneLiner = "Alertness looks low—this is a sign to take a real reset.";
+function accuracyScore(
+  correct: number,
+  total: number,
+) {
+  if (total === 0) {
+    return 0;
+  }
+
+  return (
+    (correct / total) * 100
+  );
+}
+
+function errorRateScore(
+  errors: number,
+  total: number,
+) {
+  if (total === 0) {
+    return 100;
+  }
+
+  const rate =
+    errors / total;
+
+  return interpolateScore(
+    rate,
+    [
+      [0, 100],
+      [0.25, 80],
+      [0.5, 55],
+      [0.75, 25],
+      [1, 0],
+    ],
+  );
+}
+
+/**
+ * Relative median absolute deviation.
+ *
+ * Fewer than 3 valid RTs is not enough
+ * evidence to call performance highly
+ * consistent, so return a neutral score.
+ */
+function consistencyScore(
+  rts: number[],
+) {
+  if (rts.length < 3) {
+    return 50;
+  }
+
+  const med = median(rts);
+
+  if (med <= 0) {
+    return 0;
+  }
+
+  const relativeMad =
+    mad(rts) / med;
+
+  return interpolateScore(
+    relativeMad,
+    [
+      [0.1, 100],
+      [0.15, 90],
+      [0.25, 70],
+      [0.4, 40],
+      [0.6, 0],
+    ],
+  );
+}
+
+/**
+ * App-specific heuristic thresholds.
+ *
+ * This task is not a clinical PVT, so
+ * these values should not be described
+ * as PVT norms or diagnostic cutoffs.
+ */
+function reactionSpeedScore(
+  medianMs: number,
+) {
+  if (!medianMs) {
+    return 0;
+  }
+
+  return interpolateScore(
+    medianMs,
+    [
+      [700, 100],
+      [950, 85],
+      [1250, 65],
+      [1800, 35],
+      [3000, 0],
+    ],
+  );
+}
+
+/**
+ * App-specific timing heuristic for the
+ * shortened symbol-number matching task.
+ */
+function dsstSpeedScore(
+  medianMs: number,
+) {
+  if (!medianMs) {
+    return 0;
+  }
+
+  return interpolateScore(
+    medianMs,
+    [
+      [1500, 100],
+      [2200, 75],
+      [3000, 35],
+      [3500, 0],
+    ],
+  );
+}
+
+/**
+ * App-specific Go response timing
+ * heuristic.
+ */
+function goSpeedScore(
+  medianMs: number,
+) {
+  if (!medianMs) {
+    return 0;
+  }
+
+  return interpolateScore(
+    medianMs,
+    [
+      [450, 100],
+      [650, 90],
+      [800, 75],
+      [1000, 50],
+      [1200, 0],
+    ],
+  );
+}
+
+function buildAlertness(
+  logs: AnswerLog[],
+  preset: TestPreset,
+): SignalResult {
+  const correctLogs =
+    logs.filter(
+      (log) =>
+        log.correct &&
+        log.responseMade &&
+        !log.timedOut,
+    );
+
+  const correctRTs =
+    correctLogs.map(
+      (log) => log.timeMs,
+    );
+
+  const correct =
+    logs.filter(
+      (log) => log.correct,
+    ).length;
+
+  const accuracy =
+    accuracyScore(
+      correct,
+      logs.length,
+    );
+
+  const med =
+    median(correctRTs);
+
+  const slowCount =
+    logs.filter(
+      (log) =>
+        log.timedOut ||
+        (
+          log.responseMade &&
+          log.timeMs > 1800
+        ),
+    ).length;
+
+  const slowScore =
+    logs.length > 0
+      ? 100 *
+      (
+        1 -
+        slowCount /
+        logs.length
+      )
+      : 0;
+
+  const speed =
+    reactionSpeedScore(med);
+
+  let score: number;
+
+  if (preset === "mini") {
+    score =
+      accuracy * 0.45 +
+      speed * 0.4 +
+      slowScore * 0.15;
+  } else {
+    const consistency =
+      consistencyScore(
+        correctRTs,
+      );
+
+    score =
+      accuracy * 0.35 +
+      speed * 0.35 +
+      consistency * 0.15 +
+      slowScore * 0.15;
+  }
+
+  /*
+   * Accuracy guardrail:
+   * very fast guessing should not
+   * produce an excellent alertness
+   * score.
+   */
+  if (accuracy < 75) {
+    score = Math.min(
+      score,
+      55,
+    );
+  } else if (
+    accuracy < 100
+  ) {
+    score = Math.min(
+      score,
+      80,
+    );
+  }
+
+  score = clamp(score);
+
+  const displayScore =
+    roundTo5(score);
+
+  const level =
+    scoreToLevel(
+      displayScore,
+    );
 
   return {
     title: "Alertness",
+
+    score0to100:
+      displayScore,
+
     level,
-    emoji,
-    oneLiner,
-    score0to3: score,
+
+    emoji:
+      levelEmoji(level),
+
+    oneLiner:
+      level === "Great"
+        ? "Responses were quick and accurate."
+        : level === "Good"
+          ? "Alertness looked generally solid."
+          : level === "Okay"
+            ? "Responses showed some slowing or misses."
+            : "Alertness looked reduced during this check.",
+
     details: [
-      `Reaction speed: ${med ? `${Math.round(med)} ms median` : "n/a"}`,
-      `Consistency: ${consistency}`,
-      `Lapses: ${lapses}`,
+      `Accuracy: ${Math.round(
+        accuracy,
+      )}%`,
+
+      `Median correct response: ${med
+        ? `${Math.round(
+          med,
+        )} ms`
+        : "n/a"
+      }`,
+
+      `Slow / missed responses: ${slowCount}`,
     ],
   };
 }
 
-function interpretMentalSpeed(speed: PhaseSummary): InterpretedSignal {
-  const { accuracy, med, lapses, slowdownPct } = speed;
+function buildProcessingSpeed(
+  logs: AnswerLog[],
+  preset: TestPreset,
+): SignalResult {
+  const correctLogs =
+    logs.filter(
+      (log) =>
+        log.correct &&
+        log.responseMade &&
+        !log.timedOut,
+    );
 
-  let score: 0 | 1 | 2 | 3 = 2;
+  const correctRTs =
+    correctLogs.map(
+      (log) => log.timeMs,
+    );
 
-  if (accuracy < 0.75 || lapses >= 2) score = 0;
-  else if (accuracy < 0.85 || slowdownPct > 0.2 || lapses === 1) score = 1;
-  else if (accuracy >= 0.95 && med > 0 && med < 1400 && slowdownPct <= 0.12)
-    score = 3;
-  else score = 2;
+  const correct =
+    logs.filter(
+      (log) => log.correct,
+    ).length;
 
-  const level = levelFromScore(score);
-  const emoji = emojiFromScore(score);
+  const accuracy =
+    accuracyScore(
+      correct,
+      logs.length,
+    );
 
-  const trend = trendLabel(slowdownPct);
+  const med =
+    median(correctRTs);
 
-  let oneLiner = "";
-  if (score === 3)
-    oneLiner = "Fast and accurate—good condition for learning new material.";
-  else if (score === 2)
-    oneLiner = "Solid mental speed—learning should still be productive.";
-  else if (score === 1)
-    oneLiner =
-      "Efficiency is dropping—review/practice is better than new concepts.";
-  else oneLiner = "Mental speed looks foggy—studying now will have low payoff.";
+  const speed =
+    dsstSpeedScore(med);
+
+  let score: number;
+
+  if (preset === "mini") {
+    score =
+      accuracy * 0.6 +
+      speed * 0.4;
+
+    /*
+     * Mini has only 4 processing
+     * trials, so accuracy occurs in
+     * large 25% jumps.
+     *
+     * Speed should not fully compensate
+     * for wrong matches.
+     */
+    if (accuracy < 50) {
+      score = Math.min(
+        score,
+        40,
+      );
+    } else if (
+      accuracy < 75
+    ) {
+      score = Math.min(
+        score,
+        55,
+      );
+    } else if (
+      accuracy < 100
+    ) {
+      score = Math.min(
+        score,
+        70,
+      );
+    }
+  } else {
+    const consistency =
+      consistencyScore(
+        correctRTs,
+      );
+
+    score =
+      accuracy * 0.5 +
+      speed * 0.35 +
+      consistency * 0.15;
+
+    /*
+     * Full mode has 8 processing
+     * trials. Accuracy remains a
+     * guardrail because this task
+     * measures speed AND correctness.
+     */
+    if (accuracy < 75) {
+      score = Math.min(
+        score,
+        45,
+      );
+    } else if (
+      accuracy < 87.5
+    ) {
+      score = Math.min(
+        score,
+        65,
+      );
+    } else if (
+      accuracy < 100
+    ) {
+      score = Math.min(
+        score,
+        80,
+      );
+    }
+  }
+
+  score = clamp(score);
+
+  const displayScore =
+    roundTo5(score);
+
+  const level =
+    scoreToLevel(
+      displayScore,
+    );
 
   return {
-    title: "Mental speed",
+    title:
+      "Processing efficiency",
+
+    score0to100:
+      displayScore,
+
     level,
-    emoji,
-    oneLiner,
-    score0to3: score,
+
+    emoji:
+      levelEmoji(level),
+
+    oneLiner:
+      level === "Great"
+        ? "Matching was fast and accurate."
+        : level === "Good"
+          ? "Processing efficiency looked solid."
+          : level === "Okay"
+            ? "Matching was somewhat slower or less accurate."
+            : "Matching efficiency was reduced during this check.",
+
     details: [
-      `Accuracy: ${Math.round(accuracy * 100)}%`,
-      `Speed: ${med ? `${Math.round(med)} ms median` : "n/a"}`,
-      `Trend: ${trend}`,
-      `Lapses: ${lapses}`,
+      `Accuracy: ${Math.round(
+        accuracy,
+      )}%`,
+
+      `Median correct response: ${med
+        ? `${Math.round(
+          med,
+        )} ms`
+        : "n/a"
+      }`,
     ],
   };
 }
 
-function interpretSelfControl(control: PhaseSummary): InterpretedSignal {
-  // With button-based Go/No-Go we don’t have pure false-alarm/miss separation,
-  // so we interpret “control” mainly via accuracy + lapses + consistency.
-  const { accuracy, lapses, sd, med } = control;
+function buildResponseControl(
+  logs: AnswerLog[],
+  preset: TestPreset,
+): SignalResult {
+  const goLogs =
+    logs.filter(
+      (log) =>
+        log.trialKind ===
+        "go",
+    );
 
-  let score: 0 | 1 | 2 | 3 = 2;
+  const noGoLogs =
+    logs.filter(
+      (log) =>
+        log.trialKind ===
+        "nogo",
+    );
 
-  if (accuracy < 0.75 || lapses >= 2) score = 0;
-  else if (accuracy < 0.9 || lapses === 1) score = 1;
-  else if (accuracy >= 0.98 && sd < 750) score = 3;
-  else score = 2;
+  const commissions =
+    noGoLogs.filter(
+      (log) =>
+        log.commissionError,
+    ).length;
 
-  const level = levelFromScore(score);
-  const emoji = emojiFromScore(score);
+  const omissions =
+    goLogs.filter(
+      (log) =>
+        log.omissionError,
+    ).length;
 
-  const consistency = sd > 900 ? "a bit erratic" : "steady";
+  const validGoRTs =
+    goLogs
+      .filter(
+        (log) =>
+          log.responseMade &&
+          log.correct &&
+          !log.timedOut,
+      )
+      .map(
+        (log) =>
+          log.timeMs,
+      );
 
-  let oneLiner = "";
-  if (score === 3) oneLiner = "Great control—few careless or impulse mistakes.";
-  else if (score === 2)
-    oneLiner = "Control looks stable—good for focused work.";
-  else if (score === 1)
-    oneLiner = "Some careless errors—slow down or take a short break.";
-  else oneLiner = "Control looks low—likely distracted or restless right now.";
+  const goMed =
+    median(validGoRTs);
+
+  const commissionScore =
+    errorRateScore(
+      commissions,
+      noGoLogs.length,
+    );
+
+  const omissionScore =
+    errorRateScore(
+      omissions,
+      goLogs.length,
+    );
+
+  const speed =
+    goSpeedScore(goMed);
+
+  let score: number;
+
+  if (preset === "mini") {
+    score =
+      commissionScore *
+      0.45 +
+      omissionScore *
+      0.35 +
+      speed * 0.2;
+
+    /*
+     * Mini contains only 2 No-Go
+     * trials. One commission therefore
+     * means 50% of inhibition
+     * opportunities were missed.
+     *
+     * Do not allow extremely fast Go
+     * responses to hide that.
+     */
+    if (commissions >= 2) {
+      score = Math.min(
+        score,
+        35,
+      );
+    } else if (
+      commissions === 1
+    ) {
+      score = Math.min(
+        score,
+        70,
+      );
+    }
+
+    /*
+     * Two or more missed Go trials
+     * means at least half of Mini's
+     * Go opportunities were missed.
+     */
+    if (omissions >= 2) {
+      score = Math.min(
+        score,
+        50,
+      );
+    }
+  } else {
+    const consistency =
+      consistencyScore(
+        validGoRTs,
+      );
+
+    score =
+      commissionScore *
+      0.5 +
+      omissionScore *
+      0.25 +
+      speed * 0.15 +
+      consistency * 0.1;
+  }
+
+  score = clamp(score);
+
+  const displayScore =
+    roundTo5(score);
+
+  const level =
+    scoreToLevel(
+      displayScore,
+    );
 
   return {
-    title: "Self-control",
+    title:
+      "Response control",
+
+    score0to100:
+      displayScore,
+
     level,
-    emoji,
-    oneLiner,
-    score0to3: score,
+
+    emoji:
+      levelEmoji(level),
+
+    oneLiner:
+      level === "Great"
+        ? "Response inhibition looked strong."
+        : level === "Good"
+          ? "Response control looked stable."
+          : level === "Okay"
+            ? "There were some missed or impulsive responses."
+            : "Response control was inconsistent during this check.",
+
     details: [
-      `Accuracy: ${Math.round(accuracy * 100)}%`,
-      `Consistency: ${consistency}`,
-      `Median: ${med ? `${Math.round(med)} ms` : "n/a"}`,
-      `Lapses: ${lapses}`,
+      `No-Go commission errors: ${commissions}/${noGoLogs.length}`,
+
+      `Go omissions: ${omissions}/${goLogs.length}`,
+
+      `Median Go response: ${goMed
+        ? `${Math.round(
+          goMed,
+        )} ms`
+        : "n/a"
+      }`,
     ],
   };
-}
-
-function confidenceFromTotal(total: number): Confidence {
-  if (total >= 24) return "High";
-  if (total >= 14) return "Medium";
-  return "Low";
 }
 
 function buildProfile(
-  alert: InterpretedSignal,
-  speed: InterpretedSignal,
-  control: InterpretedSignal,
+  alertness: SignalResult,
+  processing: SignalResult,
+  control: SignalResult,
 ): Profile {
-  const avg = (alert.score0to3 + speed.score0to3 + control.score0to3) / 3;
+  const overall =
+    (
+      alertness.score0to100 +
+      processing.score0to100 +
+      control.score0to100
+    ) / 3;
 
-  // Red flags
-  const anyLow =
-    alert.score0to3 === 0 || speed.score0to3 === 0 || control.score0to3 === 0;
-  const twoOrMoreOkayOrWorse =
-    [alert, speed, control].filter((s) => s.score0to3 <= 1).length >= 2;
+  const lowest =
+    Math.min(
+      alertness.score0to100,
+      processing.score0to100,
+      control.score0to100,
+    );
 
-  if (!anyLow && avg >= 2.6) {
+  if (
+    overall >= 85 &&
+    lowest >= 85
+  ) {
     return {
       emoji: "✅",
-      headline: "Excellent to study",
+
+      headline:
+        "Ready for focused work",
+
       explanation:
-        "You look sharp and steady—this is a good window for hard work.",
+        "Your objective performance was strong across all three areas.",
+
       doNow: [
         "Learn new material",
-        "Do the hardest problem set",
-        "Deep focus 25–40 min",
+        "Do difficult problem solving",
+        "Use a focused study block",
       ],
-      avoid: ["Long scrolling breaks", "Multitasking"],
+
+      avoid: [
+        "Unnecessary multitasking",
+      ],
     };
   }
 
-  if (!anyLow && avg >= 2.0) {
+  if (
+    overall >= 70 &&
+    lowest >= 50
+  ) {
     return {
       emoji: "🙂",
-      headline: "Good to study",
+
+      headline:
+        "Good to study",
+
       explanation:
-        "You’re in a workable state—keep going, but schedule a short break soon.",
-      doNow: ["Practice problems", "Review notes", "Break in ~20–30 min"],
-      avoid: ["Starting a huge new chapter if you feel tired"],
+        "Your performance looks workable for productive studying.",
+
+      doNow: [
+        "Practice problems",
+        "Review or learn material",
+        "Take a short break if focus starts dropping",
+      ],
+
+      avoid: [
+        "Long distraction-heavy breaks",
+      ],
     };
   }
 
-  if (twoOrMoreOkayOrWorse && !anyLow) {
+  if (overall >= 50) {
     return {
       emoji: "🟡",
-      headline: "Borderline",
+
+      headline:
+        "Consider lighter work",
+
       explanation:
-        "You can study, but efficiency is dropping—stick to lighter tasks.",
+        "Some performance signals were reduced.",
+
       doNow: [
-        "Review / flashcards",
-        "Light practice",
-        "Short break now or very soon",
+        "Review familiar material",
+        "Flashcards",
+        "Take a short reset",
       ],
-      avoid: ["Brand new concepts", "Timed mock exams"],
+
+      avoid: [
+        "High-stakes timed work",
+      ],
     };
   }
 
   return {
     emoji: "🟠",
-    headline: "Break recommended",
+
+    headline:
+      "Break recommended",
+
     explanation:
-      "Your signals suggest fatigue or inconsistency—reset before you push more.",
+      "Multiple performance signals were reduced during this check.",
+
     doNow: [
-      "5–10 min walk",
-      "Water + stretch",
-      "Retry the mini check after the break",
+      "Take a short break",
+      "Move around",
+      "Retry later if useful",
     ],
-    avoid: ["Forcing hard studying right now"],
+
+    avoid: [
+      "Forcing difficult work right now",
+    ],
   };
 }
 
-export function computeResults(allLogs: AnswerLog[]) {
-  const byPhase: Record<Phase, AnswerLog[]> = {
-    reaction: allLogs.filter((l) => l.phase === "reaction"),
-    speed: allLogs.filter((l) => l.phase === "speed"),
-    control: allLogs.filter((l) => l.phase === "control"),
-  };
+export function computeResults(
+  allLogs: AnswerLog[],
+  preset: TestPreset,
+) {
+  const reaction =
+    allLogs.filter(
+      (log) =>
+        log.phase ===
+        "reaction",
+    );
 
-  const phase = {
-    reaction: phaseSummary(byPhase.reaction),
-    speed: phaseSummary(byPhase.speed),
-    control: phaseSummary(byPhase.control),
-  };
+  const speed =
+    allLogs.filter(
+      (log) =>
+        log.phase ===
+        "speed",
+    );
 
-  // overall basics
-  const total = allLogs.length || 1;
-  const correctTotal = allLogs.filter((l) => l.correct && !l.timedOut).length;
-  const accuracy = correctTotal / total;
+  const control =
+    allLogs.filter(
+      (log) =>
+        log.phase ===
+        "control",
+    );
 
-  const overallRTs = allLogs.filter((l) => !l.timedOut).map((l) => l.timeMs);
-  const med = median(overallRTs);
-  const sd = stddev(overallRTs);
-  const lapses = allLogs.filter((l) => l.timedOut || l.timeMs > 2500).length;
+  const alertness =
+    buildAlertness(
+      reaction,
+      preset,
+    );
 
-  // interpreted signals
-  const alertness = interpretAlertness(phase.reaction);
-  const mentalSpeed = interpretMentalSpeed(phase.speed);
-  const selfControl = interpretSelfControl(phase.control);
+  const mentalSpeed =
+    buildProcessingSpeed(
+      speed,
+      preset,
+    );
 
-  // “readiness score” 0..100 mapped from 0..3 signal scores
-  const readiness01 = clamp01(
-    (alertness.score0to3 + mentalSpeed.score0to3 + selfControl.score0to3) / 9,
-  );
-  const readinessScore = Math.round(readiness01 * 100);
+  const selfControl =
+    buildResponseControl(
+      control,
+      preset,
+    );
 
-  const confidence = confidenceFromTotal(total);
+  const rawReadiness =
+    (
+      alertness.score0to100 +
+      mentalSpeed.score0to100 +
+      selfControl.score0to100
+    ) / 3;
 
-  const profile = buildProfile(alertness, mentalSpeed, selfControl);
+  const lowestDomain =
+    Math.min(
+      alertness.score0to100,
+      mentalSpeed.score0to100,
+      selfControl.score0to100,
+    );
 
-  // short “why” bullets (trust builder)
-  const why: string[] = [];
-  why.push(`Accuracy: ${Math.round(accuracy * 100)}%`);
-  why.push(`Lapses: ${lapses}`);
-  why.push(`Overall speed: ${med ? `${Math.round(med)} ms median` : "n/a"}`);
+  let readinessScore =
+    roundTo5(rawReadiness);
+
+  // Overall readiness should not be "Great"
+  // unless every domain is also Great.
+  if (lowestDomain < 40) {
+    readinessScore = Math.min(
+      readinessScore,
+      65,
+    );
+  } else if (lowestDomain < 55) {
+    readinessScore = Math.min(
+      readinessScore,
+      75,
+    );
+  } else if (lowestDomain < 85) {
+    readinessScore = Math.min(
+      readinessScore,
+      80,
+    );
+  }
+
+  const total =
+    allLogs.length;
+
+  const correctTotal =
+    allLogs.filter(
+      (log) =>
+        log.correct,
+    ).length;
+
+  const accuracy =
+    total > 0
+      ? correctTotal / total
+      : 0;
+
+  const profile =
+    buildProfile(
+      alertness,
+      mentalSpeed,
+      selfControl,
+    );
+
+  const confidence:
+    Confidence =
+    preset === "mini"
+      ? "Limited"
+      : "Moderate";
 
   return {
     total,
     correctTotal,
     accuracy,
-    med,
-    sd,
-    lapses,
-    byPhase,
-    phase,
 
     readinessScore,
     confidence,
@@ -360,11 +1022,30 @@ export function computeResults(allLogs: AnswerLog[]) {
     },
 
     profile,
-    why,
+
+    why: [
+      `Overall accuracy: ${Math.round(
+        accuracy * 100,
+      )}%`,
+
+      `Mode: ${preset === "mini"
+        ? "Quick estimate"
+        : "Extended check"
+      }`,
+    ],
+
+    byPhase: {
+      reaction,
+      speed,
+      control,
+    },
   };
 }
 
-export function getRecommendation(result: ReturnType<typeof computeResults>) {
-  // Keep this as a simple string for any existing callers
+export function getRecommendation(
+  result: ReturnType<
+    typeof computeResults
+  >,
+) {
   return `${result.profile.emoji} ${result.profile.headline}. ${result.profile.explanation}`;
 }

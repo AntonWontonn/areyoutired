@@ -2,25 +2,54 @@ export type Phase = "reaction" | "speed" | "control";
 
 export type QType = "rt_compare" | "dsst" | "gonogo";
 
-export type Question = {
+export type TestPreset = "mini" | "2min";
+
+export type ReactionQuestion = {
   id: string;
-  phase: Phase;
-  type: QType;
-  prompt: string;
+  phase: "reaction";
+  type: "rt_compare";
+
+  left: number;
+  right: number;
+
+  choices: ["Left", "Right"];
+  correctIndex: number;
+
+  preDelay: true;
+
+  // Research-informed app heuristic, not a validated clinical cutoff.
+  timeLimitMs: number;
+};
+
+export type DSSTQuestion = {
+  id: string;
+  phase: "speed";
+  type: "dsst";
+
+  targetLetter: string;
   choices: string[];
   correctIndex: number;
 
-  // Small random pre-delay before the question becomes answerable (reaction phase)
-  preDelay?: boolean;
-
-  // If true, allow keyboard controls (reaction phase)
-  keyboard?: boolean;
-
-  // Per-question time limit in seconds
-  timeLimitSec: number;
+  // Research-informed app heuristic.
+  timeLimitMs: number;
 };
 
-export type TestPreset = "mini" | "2min";
+export type GoNoGoQuestion = {
+  id: string;
+  phase: "control";
+  type: "gonogo";
+
+  symbol: string;
+  trialKind: "go" | "nogo";
+
+  // Adapted from Go/No-Go research timing.
+  timeLimitMs: number;
+};
+
+export type Question =
+  | ReactionQuestion
+  | DSSTQuestion
+  | GoNoGoQuestion;
 
 export type TestPack = {
   questions: Question[];
@@ -39,139 +68,195 @@ function shuffle<T>(arr: T[]) {
 }
 
 /**
- * DSST-lite key: A/B/C/D -> 1/3/7/9 in random mapping
+ * DSST-lite key:
+ * A/B/C/D -> 1/3/7/9 in a random mapping.
+ *
+ * The key stays fixed for the full speed phase.
  */
 function makeDSSTKey(): Record<string, string> {
   const letters = ["A", "B", "C", "D"];
   const digits = shuffle(["1", "3", "7", "9"]);
+
   const key: Record<string, string> = {};
-  for (let i = 0; i < letters.length; i++) key[letters[i]] = digits[i];
+
+  for (let i = 0; i < letters.length; i++) {
+    key[letters[i]] = digits[i];
+  }
+
   return key;
 }
 
-function formatDSSTKey(key: Record<string, string>) {
-  return Object.entries(key)
-    .map(([k, v]) => `${k}→${v}`)
-    .join("   ");
+function makeRTCompare(i: number): ReactionQuestion {
+  const left = randInt(10, 99);
+
+  let right = randInt(10, 99);
+
+  while (right === left) {
+    right = randInt(10, 99);
+  }
+
+  return {
+    id: `rt-${i}`,
+    phase: "reaction",
+    type: "rt_compare",
+
+    left,
+    right,
+
+    choices: ["Left", "Right"],
+    correctIndex: left > right ? 0 : 1,
+
+    preDelay: true,
+
+    // The task requires visual comparison + choice,
+    // so this is intentionally longer than a simple PVT response window.
+    timeLimitMs: 3000,
+  };
 }
 
 function makeDSST(
   i: number,
   key: Record<string, string>,
-  timeLimitSec: number,
-): Question {
+): DSSTQuestion {
   const letters = Object.keys(key);
-  const L = letters[randInt(0, letters.length - 1)];
-  const correct = key[L];
 
-  // Choices are exactly the 4 digits; shuffled.
-  const choices = shuffle(["1", "3", "7", "9"]);
-  const correctIndex = choices.indexOf(correct);
+  const targetLetter =
+    letters[randInt(0, letters.length - 1)];
+
+  const correct = key[targetLetter];
+
+  /**
+   * Keep response locations fixed.
+   *
+   * We do NOT shuffle these each trial because that would add
+   * visual-search time that is unrelated to the symbol-digit mapping.
+   */
+  const choices = ["1", "3", "7", "9"];
 
   return {
     id: `dsst-${i}`,
     phase: "speed",
     type: "dsst",
-    prompt: `Match the letter using the key:\n\n${formatDSSTKey(key)}\n\nLetter: ${L}`,
+
+    targetLetter,
     choices,
-    correctIndex,
-    timeLimitSec,
+    correctIndex: choices.indexOf(correct),
+
+    timeLimitMs: 3000,
   };
 }
 
-function makeRTCompare(i: number, timeLimitSec: number): Question {
-  const a = randInt(10, 99);
-  let b = randInt(10, 99);
-  while (b === a) b = randInt(10, 99);
+function makeGoNoGo(
+  i: number,
+  trialKind: "go" | "nogo",
+): GoNoGoQuestion {
+  const goSymbols = ["O", "△", "□", "●"];
 
-  const correct = a > b ? "Left" : "Right";
-  const choices = ["Left", "Right"];
-  const correctIndex = choices.indexOf(correct);
-
-  return {
-    id: `rt-cmp-${i}`,
-    phase: "reaction",
-    type: "rt_compare",
-    prompt: `Which number is larger?\n\n${a}     ${b}`,
-    choices,
-    correctIndex,
-    preDelay: true,
-    keyboard: true,
-    timeLimitSec,
-  };
-}
-
-function makeGoNoGo(i: number, timeLimitSec: number): Question {
-  // Rule: choose GO for everything except X.
-  const symbols = ["X", "O", "△", "□", "●"];
-  const sym = symbols[randInt(0, symbols.length - 1)];
-  const isNoGo = sym === "X";
-
-  const choices = ["GO", "NO-GO"];
-  const correctIndex = isNoGo ? 1 : 0;
+  const symbol =
+    trialKind === "nogo"
+      ? "X"
+      : goSymbols[randInt(0, goSymbols.length - 1)];
 
   return {
     id: `gn-${i}`,
     phase: "control",
     type: "gonogo",
-    prompt: `Rule: Choose GO for every symbol EXCEPT X.\n\nSymbol: ${sym}`,
-    choices,
-    correctIndex,
-    timeLimitSec,
+
+    symbol,
+    trialKind,
+
+    /**
+     * The uploaded Go/No-Go study used an 800 ms response window.
+     * We use 1000 ms initially to allow for ordinary browser/device input.
+     */
+    timeLimitMs: 1000,
   };
 }
 
 /**
- * Presets:
- * - mini: ~14 questions (fast)
- * - 2min: ~24 questions (more stable metrics)
- *
- * We order phases explicitly: Reaction -> Speed -> Control,
- * then shuffle WITHIN each phase lightly to keep it from feeling robotic.
+ * Build Go/No-Go trials with a controlled ratio instead of
+ * randomly hoping enough No-Go trials appear.
  */
-export function makeQuestionSet(preset: TestPreset): TestPack {
+function makeControlTrials(
+  goCount: number,
+  noGoCount: number,
+): GoNoGoQuestion[] {
+  const trialKinds: Array<"go" | "nogo"> = [
+    ...Array(goCount).fill("go"),
+    ...Array(noGoCount).fill("nogo"),
+  ];
+
+  return shuffle(trialKinds).map((trialKind, i) =>
+    makeGoNoGo(i, trialKind),
+  );
+}
+
+/**
+ * Presets
+ *
+ * Mini:
+ * - 4 reaction
+ * - 4 DSST
+ * - 6 control (4 Go / 2 No-Go)
+ * - total = 14
+ *
+ * Full:
+ * - 6 reaction
+ * - 8 DSST
+ * - 10 control (7 Go / 3 No-Go)
+ * - total = 24
+ *
+ * Phase order stays:
+ * Reaction -> Speed -> Control
+ */
+export function makeQuestionSet(
+  preset: TestPreset,
+): TestPack {
   const dsstKey = makeDSSTKey();
 
-  // Counts tuned for “student use”
   const config =
     preset === "mini"
       ? {
-          reactionN: 4,
-          speedN: 6,
-          controlN: 4,
-          // tighter limits for mini
-          reactionLimit: 4,
-          speedLimit: 6,
-          controlLimit: 5,
-        }
+        reactionN: 4,
+        speedN: 4,
+        goN: 4,
+        noGoN: 2,
+      }
       : {
-          reactionN: 6,
-          speedN: 10,
-          controlN: 8,
-          // slightly more room but still brisk
-          reactionLimit: 4,
-          speedLimit: 6,
-          controlLimit: 5,
-        };
+        reactionN: 6,
+        speedN: 8,
+        goN: 7,
+        noGoN: 3,
+      };
 
-  const reaction: Question[] = [];
-  for (let i = 0; i < config.reactionN; i++)
-    reaction.push(makeRTCompare(i, config.reactionLimit));
+  const reaction: ReactionQuestion[] = [];
 
-  const speed: Question[] = [];
-  for (let i = 0; i < config.speedN; i++)
-    speed.push(makeDSST(i, dsstKey, config.speedLimit));
+  for (let i = 0; i < config.reactionN; i++) {
+    reaction.push(makeRTCompare(i));
+  }
 
-  const control: Question[] = [];
-  for (let i = 0; i < config.controlN; i++)
-    control.push(makeGoNoGo(i, config.controlLimit));
+  const speed: DSSTQuestion[] = [];
 
-  // Gentle shuffle inside each phase
-  const questions = [
+  for (let i = 0; i < config.speedN; i++) {
+    speed.push(makeDSST(i, dsstKey));
+  }
+
+  const control = makeControlTrials(
+    config.goN,
+    config.noGoN,
+  );
+
+  const questions: Question[] = [
     ...shuffle(reaction),
     ...shuffle(speed),
-    ...shuffle(control),
+    ...control,
   ];
 
-  return { questions, meta: { preset, dsstKey } };
+  return {
+    questions,
+    meta: {
+      preset,
+      dsstKey,
+    },
+  };
 }

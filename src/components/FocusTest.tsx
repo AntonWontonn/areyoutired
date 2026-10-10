@@ -1,34 +1,25 @@
-// src/components/FocusTest.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 import {
   makeQuestionSet,
   type Question,
   type TestPreset,
 } from "../utils/questions";
-import {
-  computeResults,
-  getRecommendation,
-  type AnswerLog,
-} from "../utils/scoring";
+
+import type { AnswerLog } from "../utils/scoring";
+
+import TestHeader from "./TestHeader";
+import PhaseIntro from "./PhaseIntro";
+import ReactionQuestion from "./ReactionQuestion";
+import DSSTQuestion from "./DSSTQuestion";
+import GoNoGoQuestion from "./GoNoGoQuestion";
+import ResultsScreen from "./ResultsScreen";
+import PracticeScreen from "./PracticeScreen";
 
 function randInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-function phaseLabel(phase: Question["phase"]) {
-  if (phase === "reaction") return "Reaction";
-  if (phase === "speed") return "Speed";
-  return "Control";
-}
-
-function readinessLabel(score: number) {
-  if (score >= 85) return "Excellent";
-  if (score >= 70) return "Good";
-  if (score >= 55) return "Borderline";
-  if (score >= 40) return "Poor";
-  return "Very low";
 }
 
 export default function FocusTest({
@@ -38,427 +29,586 @@ export default function FocusTest({
   preset: TestPreset;
   onExit: () => void;
 }) {
-  const { questions } = useMemo(() => makeQuestionSet(preset), [preset]);
+  const testPack = useMemo(
+    () => makeQuestionSet(preset),
+    [preset],
+  );
+
+  const questions = testPack.questions;
   const total = questions.length;
 
   const [index, setIndex] = useState(0);
   const [logs, setLogs] = useState<AnswerLog[]>([]);
-  const [timeLeft, setTimeLeft] = useState<number>(5);
   const [done, setDone] = useState(false);
 
-  const [phaseState, setPhaseState] = useState<"waiting" | "active">("waiting");
-  const delayTimeoutRef = useRef<number | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
+  const [showPractice, setShowPractice] = useState(false);
 
-  const [kbSelected, setKbSelected] = useState<number>(0);
+  const [phaseState, setPhaseState] =
+    useState<"waiting" | "active" | "feedback">("waiting");
 
-  const startTimeRef = useRef<number>(Date.now());
+  const [feedback, setFeedback] =
+    useState<string | null>(null);
+
+  const streakRef = useRef(0);
+
+  const delayTimeoutRef =
+    useRef<number | null>(null);
+
+  const answerTimeoutRef =
+    useRef<number | null>(null);
+
+  const feedbackTimeoutRef =
+    useRef<number | null>(null);
+
+  const startTimeRef = useRef(0);
+
+  const answeredRef = useRef(false);
 
   const q = questions[index];
 
-  useEffect(() => {
-    if (done) return;
-    if (!q) return;
+  const phaseQuestions = questions.filter(
+    (question) => question.phase === q.phase,
+  );
 
-    setKbSelected(0);
-    setTimeLeft(q.timeLimitSec);
+  const phaseIndex =
+    questions
+      .slice(0, index + 1)
+      .filter(
+        (question) =>
+          question.phase === q.phase,
+      ).length;
 
-    if (delayTimeoutRef.current) {
-      window.clearTimeout(delayTimeoutRef.current);
+  function getControlFeedback(
+    trialKind: "go" | "nogo",
+    responseMade: boolean,
+    nextStreak: number,
+  ) {
+    if (nextStreak >= 5) {
+      return "Locked in";
+    }
+
+    if (nextStreak >= 3) {
+      return "Nice streak";
+    }
+
+    if (
+      trialKind === "go" &&
+      responseMade
+    ) {
+      return "Nice";
+    }
+
+    if (
+      trialKind === "go" &&
+      !responseMade
+    ) {
+      return "Missed it";
+    }
+
+    if (
+      trialKind === "nogo" &&
+      !responseMade
+    ) {
+      return "Nice hold";
+    }
+
+    return "Almost";
+  }
+
+  const clearTimers = useCallback(() => {
+    if (
+      delayTimeoutRef.current !== null
+    ) {
+      window.clearTimeout(
+        delayTimeoutRef.current,
+      );
+
       delayTimeoutRef.current = null;
     }
 
-    const needsDelay = Boolean(q.preDelay);
-    const delayMs = needsDelay ? randInt(300, 1200) : 0;
+    if (
+      answerTimeoutRef.current !== null
+    ) {
+      window.clearTimeout(
+        answerTimeoutRef.current,
+      );
 
-    if (needsDelay) {
-      setPhaseState("waiting");
-      delayTimeoutRef.current = window.setTimeout(() => {
-        startTimeRef.current = Date.now();
-        setPhaseState("active");
-      }, delayMs);
-    } else {
-      startTimeRef.current = Date.now();
-      setPhaseState("active");
+      answerTimeoutRef.current = null;
     }
 
-    return () => {
-      if (delayTimeoutRef.current) {
-        window.clearTimeout(delayTimeoutRef.current);
-        delayTimeoutRef.current = null;
+    if (
+      feedbackTimeoutRef.current !== null
+    ) {
+      window.clearTimeout(
+        feedbackTimeoutRef.current,
+      );
+
+      feedbackTimeoutRef.current = null;
+    }
+  }, []);
+
+  const moveToNextQuestion = useCallback(
+    (currentQuestion: Question) => {
+      if (index + 1 >= total) {
+        clearTimers();
+        setDone(true);
+        return;
       }
-    };
-  }, [index, done, q]);
 
-  useEffect(() => {
-    if (done) return;
-    if (phaseState !== "active") return;
+      const nextQuestion = questions[index + 1];
 
-    const interval = window.setInterval(() => {
-      setTimeLeft((t) => t - 1);
-    }, 1000);
+      // Hide the task before switching to the next question.
+      setPhaseState("waiting");
 
-    return () => window.clearInterval(interval);
-  }, [phaseState, done]);
+      setIndex((i) => i + 1);
 
-  useEffect(() => {
-    if (done) return;
-    if (!q) return;
-    if (phaseState !== "active") return;
-    if (timeLeft > 0) return;
-
-    handleAnswer(-1, true);
-  }, [timeLeft, done, phaseState, q]);
-
-  useEffect(() => {
-    if (done) return;
-    if (!q) return;
-    if (!q.keyboard) return;
-    if (phaseState !== "active") return;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      const isLeftRight =
-        q.choices.length === 2 &&
-        q.choices.includes("Left") &&
-        q.choices.includes("Right");
-
-      if (!isLeftRight) return;
-
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        setKbSelected(q.choices.indexOf("Left"));
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        setKbSelected(q.choices.indexOf("Right"));
-      } else if (e.key === " ") {
-        e.preventDefault();
-        handleAnswer(kbSelected, false);
+      if (
+        nextQuestion.phase !==
+        currentQuestion.phase
+      ) {
+        setShowIntro(true);
       }
-    };
+    },
+    [
+      index,
+      questions,
+      total,
+      clearTimers,
+    ],
+  );
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [done, q, phaseState, kbSelected]);
+  const finishControlTrial = useCallback(
+    (
+      currentQuestion: Extract<
+        Question,
+        { type: "gonogo" }
+      >,
+      correct: boolean,
+      timedOut: boolean,
+      timeMs: number,
+      responseMade: boolean,
+    ) => {
+      if (answeredRef.current) {
+        return;
+      }
 
-  function handleAnswer(choiceIndex: number, timedOut: boolean) {
-    if (done) return;
-    if (!q) return;
-    if (phaseState !== "active") return;
+      answeredRef.current = true;
 
-    const timeMs = Date.now() - startTimeRef.current;
-    const correct = !timedOut && choiceIndex === q.correctIndex;
+      clearTimers();
 
-    const newLogs: AnswerLog[] = [
-      ...logs,
-      { qid: q.id, phase: q.phase, correct, timeMs, timedOut },
-    ];
-    setLogs(newLogs);
+      const nextStreak =
+        correct ? streakRef.current + 1 : 0;
 
-    if (index + 1 >= total) {
-      setDone(true);
+      streakRef.current = nextStreak;
+
+
+      const message =
+        getControlFeedback(
+          currentQuestion.trialKind,
+          responseMade,
+          nextStreak,
+        );
+
+      setLogs((previousLogs) => [
+        ...previousLogs,
+        {
+          qid: currentQuestion.id,
+          phase: currentQuestion.phase,
+          type: currentQuestion.type,
+
+          correct,
+          timeMs,
+
+          timedOut,
+          responseMade,
+
+          trialKind:
+            currentQuestion.trialKind,
+
+          commissionError:
+            currentQuestion.trialKind ===
+            "nogo" &&
+            responseMade,
+
+          omissionError:
+            currentQuestion.trialKind ===
+            "go" &&
+            !responseMade,
+        },
+      ]);
+
+      setPhaseState("feedback");
+      setFeedback(message);
+
+      feedbackTimeoutRef.current =
+        window.setTimeout(() => {
+          setFeedback(null);
+
+          moveToNextQuestion(
+            currentQuestion,
+          );
+        }, 500);
+    },
+    [
+      clearTimers,
+      moveToNextQuestion,
+    ],
+  );
+
+  const finishQuestion = useCallback(
+    (
+      currentQuestion: Question,
+      correct: boolean,
+      timedOut: boolean,
+      timeMs: number,
+      responseMade: boolean,
+    ) => {
+      if (answeredRef.current) {
+        return;
+      }
+
+      answeredRef.current = true;
+
+      clearTimers();
+
+      const newLog: AnswerLog = {
+        qid: currentQuestion.id,
+        phase: currentQuestion.phase,
+        type: currentQuestion.type,
+
+        correct,
+        timeMs,
+
+        timedOut,
+        responseMade,
+      };
+
+      setLogs((previousLogs) => [
+        ...previousLogs,
+        newLog,
+      ]);
+
+      moveToNextQuestion(
+        currentQuestion,
+      );
+    },
+    [
+      clearTimers,
+      moveToNextQuestion,
+    ],
+  );
+
+  const handleTimeout = useCallback(
+    (currentQuestion: Question) => {
+      if (
+        currentQuestion.type ===
+        "gonogo"
+      ) {
+        const correct =
+          currentQuestion.trialKind ===
+          "nogo";
+
+        finishControlTrial(
+          currentQuestion,
+          correct,
+
+          currentQuestion.trialKind ===
+          "go",
+
+          currentQuestion.timeLimitMs,
+
+          false,
+        );
+
+        return;
+      }
+
+      finishQuestion(
+        currentQuestion,
+        false,
+        true,
+        currentQuestion.timeLimitMs,
+        false,
+      );
+    },
+    [
+      finishQuestion,
+      finishControlTrial,
+    ],
+  );
+
+  const activateQuestion = useCallback(
+    (currentQuestion: Question) => {
+      answeredRef.current = false;
+
+      setPhaseState("active");
+
+      startTimeRef.current =
+        performance.now();
+
+      answerTimeoutRef.current =
+        window.setTimeout(() => {
+          handleTimeout(
+            currentQuestion,
+          );
+        }, currentQuestion.timeLimitMs);
+    },
+    [handleTimeout],
+  );
+
+  useEffect(() => {
+    if (
+      done ||
+      !q ||
+      showIntro ||
+      showPractice
+    ) {
       return;
     }
-    setIndex(index + 1);
+
+    clearTimers();
+
+    setPhaseState("waiting");
+
+    if (
+      q.type === "rt_compare" &&
+      q.preDelay
+    ) {
+      const delayMs =
+        randInt(300, 1200);
+
+      delayTimeoutRef.current =
+        window.setTimeout(() => {
+          activateQuestion(q);
+        }, delayMs);
+
+      return clearTimers;
+    }
+
+    activateQuestion(q);
+
+    return clearTimers;
+  }, [
+    index,
+    showIntro,
+    showPractice,
+    done,
+    q,
+    activateQuestion,
+    clearTimers,
+  ]);
+
+  function startPractice() {
+    clearTimers();
+
+    answeredRef.current = false;
+
+    setShowPractice(true);
+  }
+
+  function finishPractice() {
+    clearTimers();
+
+    answeredRef.current = false;
+
+    setShowPractice(false);
+    setShowIntro(false);
+  }
+
+  function leavePractice() {
+    clearTimers();
+
+    answeredRef.current = false;
+
+    setShowPractice(false);
+  }
+
+  function startPhase() {
+    clearTimers();
+
+    answeredRef.current = false;
+
+    setShowIntro(false);
+  }
+
+  function handleRegularAnswer(
+    choiceIndex: number,
+  ) {
+    if (
+      !q ||
+      phaseState !== "active"
+    ) {
+      return;
+    }
+
+    if (answeredRef.current) {
+      return;
+    }
+
+    if (q.type === "gonogo") {
+      return;
+    }
+
+    const timeMs =
+      performance.now() -
+      startTimeRef.current;
+
+    const correct =
+      choiceIndex ===
+      q.correctIndex;
+
+    finishQuestion(
+      q,
+      correct,
+      false,
+      timeMs,
+      true,
+    );
+  }
+
+  function handleGoNoGoResponse() {
+    if (
+      !q ||
+      q.type !== "gonogo"
+    ) {
+      return;
+    }
+
+    if (
+      phaseState !== "active"
+    ) {
+      return;
+    }
+
+    if (answeredRef.current) {
+      return;
+    }
+
+    const timeMs =
+      performance.now() -
+      startTimeRef.current;
+
+    const correct =
+      q.trialKind === "go";
+
+    finishControlTrial(
+      q,
+      correct,
+      false,
+      timeMs,
+      true,
+    );
   }
 
   function reset() {
     window.location.reload();
   }
 
-  if (!q) {
-    return (
-      <main
-        style={{
-          maxWidth: 720,
-          margin: "40px auto",
-          padding: 16,
-          fontFamily: "system-ui",
-        }}
-      >
-        <button onClick={onExit} style={{ marginBottom: 12 }}>
-          ← Back
-        </button>
-        <p>Loading…</p>
-      </main>
-    );
-  }
-
   if (done) {
-    const result = computeResults(logs);
-    const rec = getRecommendation(result);
-
-    const pct = Math.round(result.accuracy * 100);
-    const readiness = result.readinessScore;
-    const readinessText = readinessLabel(readiness);
-
-    const { alertness, mentalSpeed, selfControl } = result.signals;
-
     return (
-      <main
-        style={{
-          maxWidth: 860,
-          margin: "40px auto",
-          padding: 16,
-          fontFamily: "system-ui",
-        }}
-      >
-        <button onClick={onExit} style={{ marginBottom: 12 }}>
-          ← Back
-        </button>
-
-        <h1>Focus Result</h1>
-
-        {/* Big verdict */}
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: 14,
-            padding: 16,
-            marginTop: 12,
-          }}
-        >
-          <div style={{ fontSize: 22, fontWeight: 700 }}>
-            {result.profile.emoji} {result.profile.headline}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 16, opacity: 0.9 }}>
-            {result.profile.explanation}
-          </div>
-
-          <div
-            style={{
-              marginTop: 12,
-              display: "flex",
-              gap: 14,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
-              <b>Focus readiness:</b> {readiness} / 100 ({readinessText})
-            </div>
-            <div>
-              <b>Confidence:</b> {result.confidence} ({result.total} questions)
-            </div>
-            <div>
-              <b>Accuracy:</b> {result.correctTotal}/{result.total} ({pct}%)
-            </div>
-            <div>
-              <b>Lapses:</b> {result.lapses}
-            </div>
-          </div>
-        </div>
-
-        {/* Signals */}
-        <h2 style={{ marginTop: 18 }}>Your focus signals</h2>
-
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          }}
-        >
-          {[alertness, mentalSpeed, selfControl].map((s) => (
-            <div
-              key={s.title}
-              style={{
-                border: "1px solid #eee",
-                borderRadius: 14,
-                padding: 14,
-              }}
-            >
-              <div style={{ fontWeight: 700, fontSize: 18 }}>
-                {s.emoji} {s.title}: {s.level}
-              </div>
-              <div style={{ marginTop: 8 }}>{s.oneLiner}</div>
-              <ul
-                style={{
-                  marginTop: 10,
-                  marginBottom: 0,
-                  paddingLeft: 18,
-                  opacity: 0.9,
-                }}
-              >
-                {s.details.map((d) => (
-                  <li key={d}>{d}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-
-        {/* Do now / Avoid */}
-        <h2 style={{ marginTop: 18 }}>What to do now</h2>
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          }}
-        >
-          <div
-            style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Recommended</div>
-            <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18 }}>
-              {result.profile.doNow.map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-          </div>
-
-          <div
-            style={{ border: "1px solid #eee", borderRadius: 14, padding: 14 }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Avoid</div>
-            <ul style={{ marginTop: 10, marginBottom: 0, paddingLeft: 18 }}>
-              {result.profile.avoid.map((x) => (
-                <li key={x}>{x}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Trust builder */}
-        <div
-          style={{
-            marginTop: 16,
-            border: "1px solid #f0f0f0",
-            borderRadius: 14,
-            padding: 14,
-          }}
-        >
-          <div style={{ fontWeight: 700 }}>Why this recommendation?</div>
-          <ul
-            style={{
-              marginTop: 10,
-              marginBottom: 0,
-              paddingLeft: 18,
-              opacity: 0.9,
-            }}
-          >
-            {result.why.map((x) => (
-              <li key={x}>{x}</li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Backwards compatible recommendation string */}
-        <p style={{ marginTop: 16, opacity: 0.85 }}>{rec}</p>
-
-        <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-          <button
-            onClick={reset}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #ccc",
-            }}
-          >
-            Retake
-          </button>
-          <button
-            onClick={onExit}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "1px solid #ccc",
-            }}
-          >
-            Home
-          </button>
-        </div>
-      </main>
+      <ResultsScreen
+        logs={logs}
+        preset={preset}
+        onRetake={reset}
+        onExit={onExit}
+      />
     );
   }
 
-  const disabled = phaseState !== "active";
+  if (!q) {
+    return <p>Loading...</p>;
+  }
 
-  const isReactionKeyboard =
-    q.keyboard &&
-    q.choices.length === 2 &&
-    q.choices.includes("Left") &&
-    q.choices.includes("Right");
+  if (showPractice) {
+    return (
+      <PracticeScreen
+        phase={q.phase}
+        dsstKey={
+          testPack.meta.dsstKey
+        }
+        onDone={finishPractice}
+        onBack={leavePractice}
+      />
+    );
+  }
+
+  if (showIntro) {
+    return (
+      <main className="test-page">
+        <button
+          className="back-button"
+          onClick={onExit}
+        >
+          ← Back
+        </button>
+
+        <PhaseIntro
+          phase={q.phase}
+          onStart={startPhase}
+          onPractice={
+            startPractice
+          }
+        />
+      </main>
+    );
+  }
 
   return (
-    <main
-      style={{
-        maxWidth: 720,
-        margin: "40px auto",
-        padding: 16,
-        fontFamily: "system-ui",
-      }}
-    >
-      <button onClick={onExit} style={{ marginBottom: 12 }}>
-        ← Back
-      </button>
+    <main className="test-page">
+      <TestHeader
+        preset={preset}
+        phase={q.phase}
+        index={phaseIndex - 1}
+        total={
+          phaseQuestions.length
+        }
+        waiting={
+          phaseState === "waiting"
+        }
+        onExit={onExit}
+      />
 
-      <h1>Focus Check</h1>
+      {q.type ===
+        "rt_compare" && (
+          <ReactionQuestion
+            question={q}
+            disabled={
+              phaseState !== "active"
+            }
+            onAnswer={
+              handleRegularAnswer
+            }
+          />
+        )}
 
-      <p style={{ margin: "6px 0" }}>
-        <b>Preset:</b> {preset === "mini" ? "Mini (~1 min)" : "Full (2 min)"} ·{" "}
-        <b>Phase:</b> {phaseLabel(q.phase)}
-      </p>
-
-      <p style={{ margin: "6px 0" }}>
-        Question {index + 1} / {total}
-      </p>
-
-      {phaseState === "waiting" ? (
-        <p style={{ margin: "6px 0" }}>
-          <b>Get ready…</b>
-        </p>
-      ) : (
-        <p style={{ margin: "6px 0" }}>
-          <b>Time left:</b> {timeLeft}s
-        </p>
+      {q.type === "dsst" && (
+        <DSSTQuestion
+          question={q}
+          dsstKey={
+            testPack.meta.dsstKey
+          }
+          disabled={
+            phaseState !== "active"
+          }
+          onAnswer={
+            handleRegularAnswer
+          }
+        />
       )}
 
-      <div
-        style={{
-          border: "1px solid #ddd",
-          borderRadius: 12,
-          padding: 16,
-          marginTop: 12,
-        }}
-      >
-        <div style={{ whiteSpace: "pre-wrap", fontSize: 22, lineHeight: 1.4 }}>
-          {q.prompt}
-        </div>
-        {isReactionKeyboard && (
-          <div style={{ marginTop: 10, opacity: 0.75, fontSize: 14 }}>
-            Keyboard: ← / → to select · Space to submit
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-        {q.choices.map((c, i) => {
-          const selected = isReactionKeyboard && i === kbSelected;
-
-          return (
-            <button
-              key={`${q.id}-${i}`}
-              disabled={disabled}
-              onClick={() => handleAnswer(i, false)}
-              style={{
-                padding: "12px 14px",
-                borderRadius: 10,
-                border: selected ? "2px solid #111" : "1px solid #ccc",
-                cursor: disabled ? "not-allowed" : "pointer",
-                textAlign: "left",
-                fontSize: 16,
-                opacity: disabled ? 0.6 : 1,
-                background: selected ? "rgba(0,0,0,0.04)" : "transparent",
-              }}
-            >
-              {c}
-            </button>
-          );
-        })}
-      </div>
-
-      <p style={{ marginTop: 14, opacity: 0.7 }}>
-        If time runs out, it auto-moves to the next question.
-      </p>
+      {q.type === "gonogo" && (
+        <GoNoGoQuestion
+          question={q}
+          disabled={
+            phaseState !== "active"
+          }
+          feedback={feedback}
+          onRespond={
+            handleGoNoGoResponse
+          }
+        />
+      )}
     </main>
   );
 }
