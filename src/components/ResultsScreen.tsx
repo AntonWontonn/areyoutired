@@ -13,14 +13,46 @@ function readinessLabel(score: number) {
     return "Low";
 }
 
+function kssLabel(score: number) {
+    if (score <= 3) return "Alert";
+    if (score <= 5) return "Neutral";
+    if (score <= 7) return "Sleepy";
+    return "Very sleepy";
+}
+
+function subjectiveObjectiveNote(
+    kss: number,
+    readiness: number,
+) {
+    if (kss >= 8 && readiness >= 85) {
+        return "You performed strongly on the objective tasks, but you reported substantial sleepiness.";
+    }
+
+    if (kss <= 3 && readiness < 50) {
+        return "You reported feeling alert, but your objective performance was reduced during this check.";
+    }
+
+    if (kss >= 7 && readiness < 70) {
+        return "Your reported sleepiness and objective performance both suggest that focus may be reduced right now.";
+    }
+
+    if (kss <= 4 && readiness >= 70) {
+        return "Your subjective alertness and objective performance were generally consistent.";
+    }
+
+    return "Subjective sleepiness and objective performance do not always move together.";
+}
+
 export default function ResultsScreen({
     logs,
     preset,
+    kss,
     onRetake,
     onExit,
 }: {
     logs: AnswerLog[];
     preset: TestPreset;
+    kss: number | null;
     onRetake: () => void;
     onExit: () => void;
 }) {
@@ -86,6 +118,29 @@ export default function ResultsScreen({
                     {result.correctTotal}/
                     {result.total} ({pct}%)
                 </p>
+                {kss !== null && (
+                    <div>
+                        <h2>How you feel</h2>
+
+                        <p>
+                            <b>Sleepiness:</b>{" "}
+                            {kss} / 9 ({kssLabel(kss)})
+                        </p>
+
+                        <p>
+                            {subjectiveObjectiveNote(
+                                kss,
+                                readiness,
+                            )}
+                        </p>
+
+                        <p>
+                            Your sleepiness rating is reported
+                            separately and does not change your
+                            objective readiness score.
+                        </p>
+                    </div>
+                )}
             </div>
 
             <h2>Your focus signals</h2>

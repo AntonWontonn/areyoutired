@@ -17,6 +17,7 @@ import DSSTQuestion from "./DSSTQuestion";
 import GoNoGoQuestion from "./GoNoGoQuestion";
 import ResultsScreen from "./ResultsScreen";
 import PracticeScreen from "./PracticeScreen";
+import KSSScreen from "./KSSScreen";
 
 function randInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -46,6 +47,12 @@ export default function FocusTest({
 
   const [phaseState, setPhaseState] =
     useState<"waiting" | "active" | "feedback">("waiting");
+  
+  const [kss, setKss] =
+    useState<number | null>(null);
+
+  const [showKss, setShowKss] =
+    useState(true);
 
   const [feedback, setFeedback] =
     useState<string | null>(null);
@@ -77,7 +84,12 @@ export default function FocusTest({
       .filter(
         (question) =>
           question.phase === q.phase,
-      ).length;
+    ).length;
+  
+  function finishKss(value: number) {
+    setKss(value);
+    setShowKss(false);
+  }
 
   function getControlFeedback(
     trialKind: "go" | "nogo",
@@ -361,6 +373,7 @@ export default function FocusTest({
     if (
       done ||
       !q ||
+      showKss ||
       showIntro ||
       showPractice
     ) {
@@ -391,6 +404,7 @@ export default function FocusTest({
     return clearTimers;
   }, [
     index,
+    showKss,
     showIntro,
     showPractice,
     done,
@@ -505,11 +519,27 @@ export default function FocusTest({
     window.location.reload();
   }
 
+  function skipKss() {
+    setKss(null);
+    setShowKss(false);
+  }
+
+  if (showKss) {
+    return (
+      <KSSScreen
+        onContinue={finishKss}
+        onSkip={skipKss}
+        onBack={onExit}
+      />
+    );
+  }
+
   if (done) {
     return (
       <ResultsScreen
         logs={logs}
         preset={preset}
+        kss={kss}
         onRetake={reset}
         onExit={onExit}
       />
