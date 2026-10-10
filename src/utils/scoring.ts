@@ -1,10 +1,6 @@
 // src/utils/scoring.ts
 
-import type {
-  Phase,
-  QType,
-  TestPreset,
-} from "./questions";
+import type { Phase, QType, TestPreset } from "./questions";
 
 export type AnswerLog = {
   qid: string;
@@ -23,15 +19,9 @@ export type AnswerLog = {
   omissionError?: boolean;
 };
 
-type Confidence =
-  | "Limited"
-  | "Moderate";
+type Confidence = "Limited" | "Moderate";
 
-type Level =
-  | "Great"
-  | "Good"
-  | "Okay"
-  | "Low";
+type Level = "Great" | "Good" | "Okay" | "Low";
 
 type SignalResult = {
   title: string;
@@ -47,12 +37,7 @@ type SignalResult = {
 type Profile = {
   headline: string;
 
-  emoji:
-  | "✅"
-  | "🙂"
-  | "🟡"
-  | "🟠"
-  | "🔴";
+  emoji: "✅" | "🙂" | "🟡" | "🟠" | "🔴";
 
   explanation: string;
 
@@ -60,15 +45,8 @@ type Profile = {
   avoid: string[];
 };
 
-function clamp(
-  x: number,
-  min = 0,
-  max = 100,
-) {
-  return Math.max(
-    min,
-    Math.min(max, x),
-  );
+function clamp(x: number, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, x));
 }
 
 function median(xs: number[]) {
@@ -76,20 +54,11 @@ function median(xs: number[]) {
     return 0;
   }
 
-  const sorted = [...xs].sort(
-    (a, b) => a - b,
-  );
+  const sorted = [...xs].sort((a, b) => a - b);
 
-  const mid = Math.floor(
-    sorted.length / 2,
-  );
+  const mid = Math.floor(sorted.length / 2);
 
-  return sorted.length % 2
-    ? sorted[mid]
-    : (
-      sorted[mid - 1] +
-      sorted[mid]
-    ) / 2;
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 function mad(xs: number[]) {
@@ -99,20 +68,14 @@ function mad(xs: number[]) {
 
   const med = median(xs);
 
-  return median(
-    xs.map((x) =>
-      Math.abs(x - med),
-    ),
-  );
+  return median(xs.map((x) => Math.abs(x - med)));
 }
 
 function roundTo5(x: number) {
   return Math.round(x / 5) * 5;
 }
 
-function scoreToLevel(
-  score: number,
-): Level {
+function scoreToLevel(score: number): Level {
   if (score >= 85) {
     return "Great";
   }
@@ -128,9 +91,7 @@ function scoreToLevel(
   return "Low";
 }
 
-function levelEmoji(
-  level: Level,
-): SignalResult["emoji"] {
+function levelEmoji(level: Level): SignalResult["emoji"] {
   if (level === "Great") {
     return "✅";
   }
@@ -153,73 +114,47 @@ function levelEmoji(
  * These timing points are app-specific
  * heuristics, not clinical norms.
  */
-function interpolateScore(
-  value: number,
-  points: Array<[number, number]>,
-) {
+function interpolateScore(value: number, points: Array<[number, number]>) {
   if (value <= points[0][0]) {
     return points[0][1];
   }
 
-  for (
-    let i = 1;
-    i < points.length;
-    i++
-  ) {
+  for (let i = 1; i < points.length; i++) {
     const [x2, y2] = points[i];
     const [x1, y1] = points[i - 1];
 
     if (value <= x2) {
-      const position =
-        (value - x1) /
-        (x2 - x1);
+      const position = (value - x1) / (x2 - x1);
 
-      return (
-        y1 +
-        position * (y2 - y1)
-      );
+      return y1 + position * (y2 - y1);
     }
   }
 
-  return points[
-    points.length - 1
-  ][1];
+  return points[points.length - 1][1];
 }
 
-function accuracyScore(
-  correct: number,
-  total: number,
-) {
+function accuracyScore(correct: number, total: number) {
   if (total === 0) {
     return 0;
   }
 
-  return (
-    (correct / total) * 100
-  );
+  return (correct / total) * 100;
 }
 
-function errorRateScore(
-  errors: number,
-  total: number,
-) {
+function errorRateScore(errors: number, total: number) {
   if (total === 0) {
     return 100;
   }
 
-  const rate =
-    errors / total;
+  const rate = errors / total;
 
-  return interpolateScore(
-    rate,
-    [
-      [0, 100],
-      [0.25, 80],
-      [0.5, 55],
-      [0.75, 25],
-      [1, 0],
-    ],
-  );
+  return interpolateScore(rate, [
+    [0, 100],
+    [0.25, 80],
+    [0.5, 55],
+    [0.75, 25],
+    [1, 0],
+  ]);
 }
 
 /**
@@ -229,9 +164,7 @@ function errorRateScore(
  * evidence to call performance highly
  * consistent, so return a neutral score.
  */
-function consistencyScore(
-  rts: number[],
-) {
+function consistencyScore(rts: number[]) {
   if (rts.length < 3) {
     return 50;
   }
@@ -242,19 +175,15 @@ function consistencyScore(
     return 0;
   }
 
-  const relativeMad =
-    mad(rts) / med;
+  const relativeMad = mad(rts) / med;
 
-  return interpolateScore(
-    relativeMad,
-    [
-      [0.1, 100],
-      [0.15, 90],
-      [0.25, 70],
-      [0.4, 40],
-      [0.6, 0],
-    ],
-  );
+  return interpolateScore(relativeMad, [
+    [0.1, 100],
+    [0.15, 90],
+    [0.25, 70],
+    [0.4, 40],
+    [0.6, 0],
+  ]);
 }
 
 /**
@@ -264,142 +193,85 @@ function consistencyScore(
  * these values should not be described
  * as PVT norms or diagnostic cutoffs.
  */
-function reactionSpeedScore(
-  medianMs: number,
-) {
+function reactionSpeedScore(medianMs: number) {
   if (!medianMs) {
     return 0;
   }
 
-  return interpolateScore(
-    medianMs,
-    [
-      [700, 100],
-      [950, 85],
-      [1250, 65],
-      [1800, 35],
-      [3000, 0],
-    ],
-  );
+  return interpolateScore(medianMs, [
+    [700, 100],
+    [950, 85],
+    [1250, 65],
+    [1800, 35],
+    [3000, 0],
+  ]);
 }
 
 /**
  * App-specific timing heuristic for the
  * shortened symbol-number matching task.
  */
-function dsstSpeedScore(
-  medianMs: number,
-) {
+function dsstSpeedScore(medianMs: number) {
   if (!medianMs) {
     return 0;
   }
 
-  return interpolateScore(
-    medianMs,
-    [
-      [1500, 100],
-      [2200, 75],
-      [3000, 35],
-      [3500, 0],
-    ],
-  );
+  return interpolateScore(medianMs, [
+    [1500, 100],
+    [2200, 75],
+    [3000, 35],
+    [3500, 0],
+  ]);
 }
 
 /**
  * App-specific Go response timing
  * heuristic.
  */
-function goSpeedScore(
-  medianMs: number,
-) {
+function goSpeedScore(medianMs: number) {
   if (!medianMs) {
     return 0;
   }
 
-  return interpolateScore(
-    medianMs,
-    [
-      [450, 100],
-      [650, 90],
-      [800, 75],
-      [1000, 50],
-      [1200, 0],
-    ],
-  );
+  return interpolateScore(medianMs, [
+    [450, 100],
+    [650, 90],
+    [800, 75],
+    [1000, 50],
+    [1200, 0],
+  ]);
 }
 
-function buildAlertness(
-  logs: AnswerLog[],
-  preset: TestPreset,
-): SignalResult {
-  const correctLogs =
-    logs.filter(
-      (log) =>
-        log.correct &&
-        log.responseMade &&
-        !log.timedOut,
-    );
+function buildAlertness(logs: AnswerLog[], preset: TestPreset): SignalResult {
+  const correctLogs = logs.filter(
+    (log) => log.correct && log.responseMade && !log.timedOut,
+  );
 
-  const correctRTs =
-    correctLogs.map(
-      (log) => log.timeMs,
-    );
+  const correctRTs = correctLogs.map((log) => log.timeMs);
 
-  const correct =
-    logs.filter(
-      (log) => log.correct,
-    ).length;
+  const correct = logs.filter((log) => log.correct).length;
 
-  const accuracy =
-    accuracyScore(
-      correct,
-      logs.length,
-    );
+  const accuracy = accuracyScore(correct, logs.length);
 
-  const med =
-    median(correctRTs);
+  const med = median(correctRTs);
 
-  const slowCount =
-    logs.filter(
-      (log) =>
-        log.timedOut ||
-        (
-          log.responseMade &&
-          log.timeMs > 1800
-        ),
-    ).length;
+  const slowCount = logs.filter(
+    (log) => log.timedOut || (log.responseMade && log.timeMs > 1800),
+  ).length;
 
-  const slowScore =
-    logs.length > 0
-      ? 100 *
-      (
-        1 -
-        slowCount /
-        logs.length
-      )
-      : 0;
+  const slowScore = logs.length > 0 ? 100 * (1 - slowCount / logs.length) : 0;
 
-  const speed =
-    reactionSpeedScore(med);
+  const speed = reactionSpeedScore(med);
 
   let score: number;
 
   if (preset === "mini") {
-    score =
-      accuracy * 0.45 +
-      speed * 0.4 +
-      slowScore * 0.15;
+    score = accuracy * 0.45 + speed * 0.4 + slowScore * 0.15;
   } else {
-    const consistency =
-      consistencyScore(
-        correctRTs,
-      );
+    const consistency = consistencyScore(correctRTs);
 
     score =
-      accuracy * 0.35 +
-      speed * 0.35 +
-      consistency * 0.15 +
-      slowScore * 0.15;
+      accuracy * 0.35 + speed * 0.35 + consistency * 0.15 + slowScore * 0.15;
   }
 
   /*
@@ -409,39 +281,25 @@ function buildAlertness(
    * score.
    */
   if (accuracy < 75) {
-    score = Math.min(
-      score,
-      55,
-    );
-  } else if (
-    accuracy < 100
-  ) {
-    score = Math.min(
-      score,
-      80,
-    );
+    score = Math.min(score, 55);
+  } else if (accuracy < 100) {
+    score = Math.min(score, 80);
   }
 
   score = clamp(score);
 
-  const displayScore =
-    roundTo5(score);
+  const displayScore = roundTo5(score);
 
-  const level =
-    scoreToLevel(
-      displayScore,
-    );
+  const level = scoreToLevel(displayScore);
 
   return {
     title: "Alertness",
 
-    score0to100:
-      displayScore,
+    score0to100: displayScore,
 
     level,
 
-    emoji:
-      levelEmoji(level),
+    emoji: levelEmoji(level),
 
     oneLiner:
       level === "Great"
@@ -453,16 +311,9 @@ function buildAlertness(
             : "Alertness looked reduced during this check.",
 
     details: [
-      `Accuracy: ${Math.round(
-        accuracy,
-      )}%`,
+      `Accuracy: ${Math.round(accuracy)}%`,
 
-      `Median correct response: ${med
-        ? `${Math.round(
-          med,
-        )} ms`
-        : "n/a"
-      }`,
+      `Median correct response: ${med ? `${Math.round(med)} ms` : "n/a"}`,
 
       `Slow / missed responses: ${slowCount}`,
     ],
@@ -473,42 +324,24 @@ function buildProcessingSpeed(
   logs: AnswerLog[],
   preset: TestPreset,
 ): SignalResult {
-  const correctLogs =
-    logs.filter(
-      (log) =>
-        log.correct &&
-        log.responseMade &&
-        !log.timedOut,
-    );
+  const correctLogs = logs.filter(
+    (log) => log.correct && log.responseMade && !log.timedOut,
+  );
 
-  const correctRTs =
-    correctLogs.map(
-      (log) => log.timeMs,
-    );
+  const correctRTs = correctLogs.map((log) => log.timeMs);
 
-  const correct =
-    logs.filter(
-      (log) => log.correct,
-    ).length;
+  const correct = logs.filter((log) => log.correct).length;
 
-  const accuracy =
-    accuracyScore(
-      correct,
-      logs.length,
-    );
+  const accuracy = accuracyScore(correct, logs.length);
 
-  const med =
-    median(correctRTs);
+  const med = median(correctRTs);
 
-  const speed =
-    dsstSpeedScore(med);
+  const speed = dsstSpeedScore(med);
 
   let score: number;
 
   if (preset === "mini") {
-    score =
-      accuracy * 0.6 +
-      speed * 0.4;
+    score = accuracy * 0.6 + speed * 0.4;
 
     /*
      * Mini has only 4 processing
@@ -519,35 +352,16 @@ function buildProcessingSpeed(
      * for wrong matches.
      */
     if (accuracy < 50) {
-      score = Math.min(
-        score,
-        40,
-      );
-    } else if (
-      accuracy < 75
-    ) {
-      score = Math.min(
-        score,
-        55,
-      );
-    } else if (
-      accuracy < 100
-    ) {
-      score = Math.min(
-        score,
-        70,
-      );
+      score = Math.min(score, 40);
+    } else if (accuracy < 75) {
+      score = Math.min(score, 55);
+    } else if (accuracy < 100) {
+      score = Math.min(score, 70);
     }
   } else {
-    const consistency =
-      consistencyScore(
-        correctRTs,
-      );
+    const consistency = consistencyScore(correctRTs);
 
-    score =
-      accuracy * 0.5 +
-      speed * 0.35 +
-      consistency * 0.15;
+    score = accuracy * 0.5 + speed * 0.35 + consistency * 0.15;
 
     /*
      * Full mode has 8 processing
@@ -556,48 +370,28 @@ function buildProcessingSpeed(
      * measures speed AND correctness.
      */
     if (accuracy < 75) {
-      score = Math.min(
-        score,
-        45,
-      );
-    } else if (
-      accuracy < 87.5
-    ) {
-      score = Math.min(
-        score,
-        65,
-      );
-    } else if (
-      accuracy < 100
-    ) {
-      score = Math.min(
-        score,
-        80,
-      );
+      score = Math.min(score, 45);
+    } else if (accuracy < 87.5) {
+      score = Math.min(score, 65);
+    } else if (accuracy < 100) {
+      score = Math.min(score, 80);
     }
   }
 
   score = clamp(score);
 
-  const displayScore =
-    roundTo5(score);
+  const displayScore = roundTo5(score);
 
-  const level =
-    scoreToLevel(
-      displayScore,
-    );
+  const level = scoreToLevel(displayScore);
 
   return {
-    title:
-      "Processing efficiency",
+    title: "Processing efficiency",
 
-    score0to100:
-      displayScore,
+    score0to100: displayScore,
 
     level,
 
-    emoji:
-      levelEmoji(level),
+    emoji: levelEmoji(level),
 
     oneLiner:
       level === "Great"
@@ -609,16 +403,9 @@ function buildProcessingSpeed(
             : "Matching efficiency was reduced during this check.",
 
     details: [
-      `Accuracy: ${Math.round(
-        accuracy,
-      )}%`,
+      `Accuracy: ${Math.round(accuracy)}%`,
 
-      `Median correct response: ${med
-        ? `${Math.round(
-          med,
-        )} ms`
-        : "n/a"
-      }`,
+      `Median correct response: ${med ? `${Math.round(med)} ms` : "n/a"}`,
     ],
   };
 }
@@ -627,72 +414,30 @@ function buildResponseControl(
   logs: AnswerLog[],
   preset: TestPreset,
 ): SignalResult {
-  const goLogs =
-    logs.filter(
-      (log) =>
-        log.trialKind ===
-        "go",
-    );
+  const goLogs = logs.filter((log) => log.trialKind === "go");
 
-  const noGoLogs =
-    logs.filter(
-      (log) =>
-        log.trialKind ===
-        "nogo",
-    );
+  const noGoLogs = logs.filter((log) => log.trialKind === "nogo");
 
-  const commissions =
-    noGoLogs.filter(
-      (log) =>
-        log.commissionError,
-    ).length;
+  const commissions = noGoLogs.filter((log) => log.commissionError).length;
 
-  const omissions =
-    goLogs.filter(
-      (log) =>
-        log.omissionError,
-    ).length;
+  const omissions = goLogs.filter((log) => log.omissionError).length;
 
-  const validGoRTs =
-    goLogs
-      .filter(
-        (log) =>
-          log.responseMade &&
-          log.correct &&
-          !log.timedOut,
-      )
-      .map(
-        (log) =>
-          log.timeMs,
-      );
+  const validGoRTs = goLogs
+    .filter((log) => log.responseMade && log.correct && !log.timedOut)
+    .map((log) => log.timeMs);
 
-  const goMed =
-    median(validGoRTs);
+  const goMed = median(validGoRTs);
 
-  const commissionScore =
-    errorRateScore(
-      commissions,
-      noGoLogs.length,
-    );
+  const commissionScore = errorRateScore(commissions, noGoLogs.length);
 
-  const omissionScore =
-    errorRateScore(
-      omissions,
-      goLogs.length,
-    );
+  const omissionScore = errorRateScore(omissions, goLogs.length);
 
-  const speed =
-    goSpeedScore(goMed);
+  const speed = goSpeedScore(goMed);
 
   let score: number;
 
   if (preset === "mini") {
-    score =
-      commissionScore *
-      0.45 +
-      omissionScore *
-      0.35 +
-      speed * 0.2;
+    score = commissionScore * 0.45 + omissionScore * 0.35 + speed * 0.2;
 
     /*
      * Mini contains only 2 No-Go
@@ -704,17 +449,9 @@ function buildResponseControl(
      * responses to hide that.
      */
     if (commissions >= 2) {
-      score = Math.min(
-        score,
-        35,
-      );
-    } else if (
-      commissions === 1
-    ) {
-      score = Math.min(
-        score,
-        70,
-      );
+      score = Math.min(score, 35);
+    } else if (commissions === 1) {
+      score = Math.min(score, 70);
     }
 
     /*
@@ -723,47 +460,32 @@ function buildResponseControl(
      * Go opportunities were missed.
      */
     if (omissions >= 2) {
-      score = Math.min(
-        score,
-        50,
-      );
+      score = Math.min(score, 50);
     }
   } else {
-    const consistency =
-      consistencyScore(
-        validGoRTs,
-      );
+    const consistency = consistencyScore(validGoRTs);
 
     score =
-      commissionScore *
-      0.5 +
-      omissionScore *
-      0.25 +
+      commissionScore * 0.5 +
+      omissionScore * 0.25 +
       speed * 0.15 +
       consistency * 0.1;
   }
 
   score = clamp(score);
 
-  const displayScore =
-    roundTo5(score);
+  const displayScore = roundTo5(score);
 
-  const level =
-    scoreToLevel(
-      displayScore,
-    );
+  const level = scoreToLevel(displayScore);
 
   return {
-    title:
-      "Response control",
+    title: "Response control",
 
-    score0to100:
-      displayScore,
+    score0to100: displayScore,
 
     level,
 
-    emoji:
-      levelEmoji(level),
+    emoji: levelEmoji(level),
 
     oneLiner:
       level === "Great"
@@ -779,12 +501,7 @@ function buildResponseControl(
 
       `Go omissions: ${omissions}/${goLogs.length}`,
 
-      `Median Go response: ${goMed
-        ? `${Math.round(
-          goMed,
-        )} ms`
-        : "n/a"
-      }`,
+      `Median Go response: ${goMed ? `${Math.round(goMed)} ms` : "n/a"}`,
     ],
   };
 }
@@ -795,28 +512,19 @@ function buildProfile(
   control: SignalResult,
 ): Profile {
   const overall =
-    (
-      alertness.score0to100 +
-      processing.score0to100 +
-      control.score0to100
-    ) / 3;
+    (alertness.score0to100 + processing.score0to100 + control.score0to100) / 3;
 
-  const lowest =
-    Math.min(
-      alertness.score0to100,
-      processing.score0to100,
-      control.score0to100,
-    );
+  const lowest = Math.min(
+    alertness.score0to100,
+    processing.score0to100,
+    control.score0to100,
+  );
 
-  if (
-    overall >= 85 &&
-    lowest >= 85
-  ) {
+  if (overall >= 85 && lowest >= 85) {
     return {
       emoji: "✅",
 
-      headline:
-        "Ready for focused work",
+      headline: "Ready for focused work",
 
       explanation:
         "Your objective performance was strong across all three areas.",
@@ -827,24 +535,17 @@ function buildProfile(
         "Use a focused study block",
       ],
 
-      avoid: [
-        "Unnecessary multitasking",
-      ],
+      avoid: ["Unnecessary multitasking"],
     };
   }
 
-  if (
-    overall >= 70 &&
-    lowest >= 50
-  ) {
+  if (overall >= 70 && lowest >= 50) {
     return {
       emoji: "🙂",
 
-      headline:
-        "Good to study",
+      headline: "Good to study",
 
-      explanation:
-        "Your performance looks workable for productive studying.",
+      explanation: "Your performance looks workable for productive studying.",
 
       doNow: [
         "Practice problems",
@@ -852,9 +553,7 @@ function buildProfile(
         "Take a short break if focus starts dropping",
       ],
 
-      avoid: [
-        "Long distraction-heavy breaks",
-      ],
+      avoid: ["Long distraction-heavy breaks"],
     };
   }
 
@@ -862,150 +561,75 @@ function buildProfile(
     return {
       emoji: "🟡",
 
-      headline:
-        "Consider lighter work",
+      headline: "Consider lighter work",
 
-      explanation:
-        "Some performance signals were reduced.",
+      explanation: "Some performance signals were reduced.",
 
-      doNow: [
-        "Review familiar material",
-        "Flashcards",
-        "Take a short reset",
-      ],
+      doNow: ["Review familiar material", "Flashcards", "Take a short reset"],
 
-      avoid: [
-        "High-stakes timed work",
-      ],
+      avoid: ["High-stakes timed work"],
     };
   }
 
   return {
     emoji: "🟠",
 
-    headline:
-      "Break recommended",
+    headline: "Break recommended",
 
-    explanation:
-      "Multiple performance signals were reduced during this check.",
+    explanation: "Multiple performance signals were reduced during this check.",
 
-    doNow: [
-      "Take a short break",
-      "Move around",
-      "Retry later if useful",
-    ],
+    doNow: ["Take a short break", "Move around", "Retry later if useful"],
 
-    avoid: [
-      "Forcing difficult work right now",
-    ],
+    avoid: ["Forcing difficult work right now"],
   };
 }
 
-export function computeResults(
-  allLogs: AnswerLog[],
-  preset: TestPreset,
-) {
-  const reaction =
-    allLogs.filter(
-      (log) =>
-        log.phase ===
-        "reaction",
-    );
+export function computeResults(allLogs: AnswerLog[], preset: TestPreset) {
+  const reaction = allLogs.filter((log) => log.phase === "reaction");
 
-  const speed =
-    allLogs.filter(
-      (log) =>
-        log.phase ===
-        "speed",
-    );
+  const speed = allLogs.filter((log) => log.phase === "speed");
 
-  const control =
-    allLogs.filter(
-      (log) =>
-        log.phase ===
-        "control",
-    );
+  const control = allLogs.filter((log) => log.phase === "control");
 
-  const alertness =
-    buildAlertness(
-      reaction,
-      preset,
-    );
+  const alertness = buildAlertness(reaction, preset);
 
-  const mentalSpeed =
-    buildProcessingSpeed(
-      speed,
-      preset,
-    );
+  const mentalSpeed = buildProcessingSpeed(speed, preset);
 
-  const selfControl =
-    buildResponseControl(
-      control,
-      preset,
-    );
+  const selfControl = buildResponseControl(control, preset);
 
   const rawReadiness =
-    (
-      alertness.score0to100 +
+    (alertness.score0to100 +
       mentalSpeed.score0to100 +
-      selfControl.score0to100
-    ) / 3;
+      selfControl.score0to100) /
+    3;
 
-  const lowestDomain =
-    Math.min(
-      alertness.score0to100,
-      mentalSpeed.score0to100,
-      selfControl.score0to100,
-    );
+  const lowestDomain = Math.min(
+    alertness.score0to100,
+    mentalSpeed.score0to100,
+    selfControl.score0to100,
+  );
 
-  let readinessScore =
-    roundTo5(rawReadiness);
+  let readinessScore = roundTo5(rawReadiness);
 
   // Overall readiness should not be "Great"
   // unless every domain is also Great.
   if (lowestDomain < 40) {
-    readinessScore = Math.min(
-      readinessScore,
-      65,
-    );
+    readinessScore = Math.min(readinessScore, 65);
   } else if (lowestDomain < 55) {
-    readinessScore = Math.min(
-      readinessScore,
-      75,
-    );
+    readinessScore = Math.min(readinessScore, 75);
   } else if (lowestDomain < 85) {
-    readinessScore = Math.min(
-      readinessScore,
-      80,
-    );
+    readinessScore = Math.min(readinessScore, 80);
   }
 
-  const total =
-    allLogs.length;
+  const total = allLogs.length;
 
-  const correctTotal =
-    allLogs.filter(
-      (log) =>
-        log.correct,
-    ).length;
+  const correctTotal = allLogs.filter((log) => log.correct).length;
 
-  const accuracy =
-    total > 0
-      ? correctTotal / total
-      : 0;
+  const accuracy = total > 0 ? correctTotal / total : 0;
 
-  const profile =
-    buildProfile(
-      alertness,
-      mentalSpeed,
-      selfControl,
-    );
+  const profile = buildProfile(alertness, mentalSpeed, selfControl);
 
-  const confidence:
-    Confidence =
-    preset === "mini"
-      ? "Limited"
-      : "Moderate";
+  const confidence: Confidence = preset === "mini" ? "Limited" : "Moderate";
 
   return {
     total,
@@ -1024,14 +648,9 @@ export function computeResults(
     profile,
 
     why: [
-      `Overall accuracy: ${Math.round(
-        accuracy * 100,
-      )}%`,
+      `Overall accuracy: ${Math.round(accuracy * 100)}%`,
 
-      `Mode: ${preset === "mini"
-        ? "Quick estimate"
-        : "Extended check"
-      }`,
+      `Mode: ${preset === "mini" ? "Quick estimate" : "Extended check"}`,
     ],
 
     byPhase: {
@@ -1042,10 +661,6 @@ export function computeResults(
   };
 }
 
-export function getRecommendation(
-  result: ReturnType<
-    typeof computeResults
-  >,
-) {
+export function getRecommendation(result: ReturnType<typeof computeResults>) {
   return `${result.profile.emoji} ${result.profile.headline}. ${result.profile.explanation}`;
 }

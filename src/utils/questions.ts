@@ -46,10 +46,7 @@ export type GoNoGoQuestion = {
   timeLimitMs: number;
 };
 
-export type Question =
-  | ReactionQuestion
-  | DSSTQuestion
-  | GoNoGoQuestion;
+export type Question = ReactionQuestion | DSSTQuestion | GoNoGoQuestion;
 
 export type TestPack = {
   questions: Question[];
@@ -114,14 +111,10 @@ function makeRTCompare(i: number): ReactionQuestion {
   };
 }
 
-function makeDSST(
-  i: number,
-  key: Record<string, string>,
-): DSSTQuestion {
+function makeDSST(i: number, key: Record<string, string>): DSSTQuestion {
   const letters = Object.keys(key);
 
-  const targetLetter =
-    letters[randInt(0, letters.length - 1)];
+  const targetLetter = letters[randInt(0, letters.length - 1)];
 
   const correct = key[targetLetter];
 
@@ -146,16 +139,11 @@ function makeDSST(
   };
 }
 
-function makeGoNoGo(
-  i: number,
-  trialKind: "go" | "nogo",
-): GoNoGoQuestion {
+function makeGoNoGo(i: number, trialKind: "go" | "nogo"): GoNoGoQuestion {
   const goSymbols = ["O", "△", "□", "●"];
 
   const symbol =
-    trialKind === "nogo"
-      ? "X"
-      : goSymbols[randInt(0, goSymbols.length - 1)];
+    trialKind === "nogo" ? "X" : goSymbols[randInt(0, goSymbols.length - 1)];
 
   return {
     id: `gn-${i}`,
@@ -186,9 +174,7 @@ function makeControlTrials(
     ...Array(noGoCount).fill("nogo"),
   ];
 
-  return shuffle(trialKinds).map((trialKind, i) =>
-    makeGoNoGo(i, trialKind),
-  );
+  return shuffle(trialKinds).map((trialKind, i) => makeGoNoGo(i, trialKind));
 }
 
 /**
@@ -209,25 +195,23 @@ function makeControlTrials(
  * Phase order stays:
  * Reaction -> Speed -> Control
  */
-export function makeQuestionSet(
-  preset: TestPreset,
-): TestPack {
+export function makeQuestionSet(preset: TestPreset): TestPack {
   const dsstKey = makeDSSTKey();
 
   const config =
     preset === "mini"
       ? {
-        reactionN: 4,
-        speedN: 4,
-        goN: 4,
-        noGoN: 2,
-      }
+          reactionN: 4,
+          speedN: 4,
+          goN: 4,
+          noGoN: 2,
+        }
       : {
-        reactionN: 6,
-        speedN: 8,
-        goN: 7,
-        noGoN: 3,
-      };
+          reactionN: 6,
+          speedN: 8,
+          goN: 7,
+          noGoN: 3,
+        };
 
   const reaction: ReactionQuestion[] = [];
 
@@ -241,10 +225,7 @@ export function makeQuestionSet(
     speed.push(makeDSST(i, dsstKey));
   }
 
-  const control = makeControlTrials(
-    config.goN,
-    config.noGoN,
-  );
+  const control = makeControlTrials(config.goN, config.noGoN);
 
   const questions: Question[] = [
     ...shuffle(reaction),
